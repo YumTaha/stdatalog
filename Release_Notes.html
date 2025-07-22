@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Release Notes for STDATALOG_PYSDK</title>
+  <style type="text/css">
+      code{white-space: pre-wrap;}
+      span.smallcaps{font-variant: small-caps;}
+      span.underline{text-decoration: underline;}
+      div.column{display: inline-block; vertical-align: top; width: 50%;}
+  </style>
+  <link rel="stylesheet" href="_htmresc/mini-st_2020.css" />
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+  <link rel="icon" type="image/x-icon" href="_htmresc/favicon.png" />
+</head>
+<body>
+<div class="row">
+<div class="col-sm-12 col-lg-4">
+<center>
+<h1 id="release-notes-for-stdatalog_pysdk">Release Notes for <mark>STDATALOG_PYSDK</mark></h1>
+<p>Copyright © 2025 STMicroelectronics</p>
+<a href="https://www.st.com" class="logo"><img src="_htmresc/st_logo_2020.png" alt="ST logo" /></a>
+</center>
+<h1 id="purpose">Purpose</h1>
+<p>The <strong><a href="https://github.com/STMicroelectronics/stdatalog-pysdk">STDATALOG_PYSDK</a></strong> is a comprehensive Python framework designed to facilitate the capture, processing, and visualization of data from a wide range of sources, including sensors, algorithms, simulated signals, and telemetries from actuators.</p>
+<p>This software development kit is designed with an open and modular architecture, making it an excellent resource for data scientists and embedded designers. <strong>STDATALOG-PYSDK</strong> has been developed in <strong>Python 3.13</strong>, but it is compatible also with Python 3.12, 3.11 and 3.10.</p>
+<p>It provides a range of tools and utilities designed to simplify the development of applications that use data from ST system solutions.</p>
+<p>It includes Python scripts to create, elaborate, and organize data into structured datasets. These datasets are compatible with mainstream data science toolchains, promoting reusability across multiple projects. Additionally, the scripts can be easily integrated into any data science design workflow.</p>
+<p>It is formerly known as <strong>HSDPython_SDK</strong>, previously distributed in <strong>FP-SNS-DATALOG1</strong>, <strong>FP-SNS-DATALOG2</strong>, and <strong>FP-IND-DATALOGMC</strong> function packs</p>
+</div>
+<div class="col-sm-12 col-lg-8">
+<h1 id="update-history">Update History</h1>
+<div class="collapse">
+<input type="checkbox" id="collapse-section3" checked aria-hidden="true"> <label for="collapse-section3" aria-hidden="true">v1.2.0 / 20-Jun-25</label>
+<div>
+<h2 id="main-changes">Main Changes</h2>
+<h3 id="maintenance-release">Maintenance Release</h3>
+<ul>
+<li>Added support to Python 3.13</li>
+<li>Redesigned USB catalog management: local catalog automatically synched with the online catalog</li>
+<li>Removed dependency from matplotlib: use Parquet + Plotly (wResampler) + Dash as default for HSDatalog_v2 plots</li>
+<li>Updated type_conversion, managing float_t, double_t, int_24_t, uint24_t</li>
+<li>Updated ACTUATOR components and properties management</li>
+<li>Integration of new staiotcraft_sdk library version</li>
+<li>Bug fixing and code cleaning</li>
+<li>Refer to each package Release_Notes for the detailed changelog</li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section2" aria-hidden="true"> <label for="collapse-section2" aria-hidden="true">v1.1.0 / 9-Apr-25</label>
+<div>
+<h2 id="main-changes-1">Main Changes</h2>
+<h3 id="maintenance-release-1">Maintenance Release</h3>
+<ul>
+<li><strong>Added macos support.</strong></li>
+<li>stdatalog_core:
+<ul>
+<li>Updated libhs_datalog_v2 libraries for all the supported OS.
+<ul>
+<li>Updated libusb linking and added missing lirbary import for UNIX.</li>
+<li>Added a new logging system to manage application messages with different levels (NONE, ERROR, WARNING, INFO, DEBUG).</li>
+<li>Updated cmake_minimum_required version used to recompile libraries.</li>
+<li>Added new hs_datalog_load_ucf_file_to_mlc API (deprecated old hs_datalog_load_ucf_to_mlc API).</li>
+</ul></li>
+</ul></li>
+<li>stdatalog_gui:
+<ul>
+<li>Optimized TagsInfoWidget creation function.</li>
+<li>Fixed SpinBoxes arrows icons + QFrame unwanted borders + CommandWidget button name</li>
+</ul></li>
+<li>Added support for Vanilla and serial datalogger.</li>
+<li>Use the latest PySide6 version compatible w.r.t. architecture (Windows, Linux, macOS; 32bit, 64bit).</li>
+<li>Upgraded package dependencies and versions.</li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section1" aria-hidden="true"> <label for="collapse-section1" aria-hidden="true">v1.0.0 / 17-Jan-25</label>
+<div>
+<h2 id="main-changes-2">Main Changes</h2>
+<h3 id="first-official-release">First official release</h3>
+<h2 id="backward-compatibility">Backward Compatibility</h2>
+<ul>
+<li><strong>STDATALOG-PYSDK</strong> is the extension and the evolution of <strong>HSDPython_SDK v3.4.0</strong>. Main changes are:
+<ul>
+<li><strong>Complete refactoring of the SDK and of the examples folders</strong></li>
+<li><strong>Reshaped installer scripts and package dependencies</strong></li>
+<li><strong>Removed asciimatic package installation from SDK installer scripts, added a dependency check with automatic setup only when needed</strong></li>
+<li><strong>Add HDF5 file format conversion in stdatalog_data_export.py script</strong></li>
+<li><strong>New feature: upload datasets to ST AIoT Craft online tool</strong></li>
+<li><strong>HSD_datatoolkit package renamed into stdatalog_dtk and moved out from stdatalog_core (former st_datalog), with updated documentation + HSD_DataToolkit class code optimized</strong></li>
+<li>Updates and bug fixed in stdatalog_core (former st_datalog)
+<ul>
+<li>Fixed spectrograms plots when acquisition is tagged + fixed sub-plots legend</li>
+<li>Added HDF5 converter function</li>
+<li>Added support for python 3.10, 3.11 and 3.12 in staiotcraft dependencies (different wheel versions) removed old ones</li>
+<li>DataClass.py moved here from stdatalog_gui.Utils (former st_dtdl_gui)</li>
+<li>Removed unused code</li>
+<li>Fixed chunk_time_size value management in get_data_and_timestamp functions</li>
+<li>Fixed dataset aggregation feature in ‘split_per_tags’ case</li>
+</ul></li>
+<li>Updates and bug fixed in stdatalog_gui (former st_dtdl_gui)
+<ul>
+<li>Moved here HSD_GUI and HSD_MC_GUI folders from stdatalog_core (former st_datalog)</li>
+<li>Fixed enum values extraction for Components with HSD constraints</li>
+<li>Added key shortcut for data tagging</li>
+<li>Updated telemetries plot widgets with voltage and current scaler and created dedicated controller class for motor control application</li>
+<li>Fixed motor controller log behavior</li>
+<li>Updated default rotation for ToF Heatmap widget</li>
+</ul></li>
+<li>Updated Device Template models and board catalog in stdatalog_pnpl (former st_pnpl)</li>
+</ul></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<footer class="sticky">
+<div class="columns">
+<div class="column" style="width:95%;">
+<p>For complete documentation, visit: <a href="https://github.com/STMicroelectronics/stdatalog-pysdk">www.st.com</a></p>
+</div><div class="column" style="width:5%;">
+<p><abbr title="Based on template cx566953 version 2.0">Info</abbr></p>
+</div>
+</div>
+</footer>
+</body>
+</html>
