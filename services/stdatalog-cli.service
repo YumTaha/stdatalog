@@ -1,0 +1,22 @@
+[Unit]
+Description=STDatalog CLI Logger Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=kirwinr
+Group=kirwinr
+WorkingDirectory=/home/kirwinr/Documents/stdatalog-pysdk/stdatalog_examples/gui_applications/stdatalog/CLI
+Environment=PYTHONPATH=/home/kirwinr/Documents/stdatalog-pysdk
+ExecStart=/home/kirwinr/Documents/stdatalog-pysdk/.venv/bin/python stdatalog_CLI.py
+Restart=no
+RestartSec=5
+StandardOutput=append:/home/kirwinr/logs/stdatalog-cli.log
+StandardError=append:/home/kirwinr/logs/stdatalog-cli.log
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

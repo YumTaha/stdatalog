@@ -1,0 +1,19 @@
+[Unit]
+Description=STDatalog Service Monitor Dashboard
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=kirwinr
+Group=kirwinr
+WorkingDirectory=/home/kirwinr/Documents/stdatalog-pysdk/services
+Environment=PYTHONPATH=/home/kirwinr/Documents/stdatalog-pysdk
+ExecStart=/home/kirwinr/Documents/stdatalog-pysdk/.venv/bin/python service_monitor.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/kirwinr/logs/service-monitor.log
+StandardError=append:/home/kirwinr/logs/service-monitor.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=STDatalog BLE Controller Service
+After=network.target bluetooth.target
+Wants=network.target bluetooth.target
+Requires=bluetooth.target
+
+[Service]
+Type=simple
+User=kirwinr
+Group=kirwinr
+WorkingDirectory=/home/kirwinr/Documents/stdatalog-pysdk/thread
+Environment=PYTHONPATH=/home/kirwinr/Documents/stdatalog-pysdk
+ExecStart=/home/kirwinr/Documents/stdatalog-pysdk/thread/test/bin/python ble.py
+Restart=on-failure
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+StandardOutput=append:/home/kirwinr/logs/stdatalog-ble.log
+StandardError=append:/home/kirwinr/logs/stdatalog-ble.log
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

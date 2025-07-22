@@ -1,0 +1,218 @@
+#!/bin/bash
+# STDatalog Service Management Script
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+SERVICES=("stdatalog-cli" "stdatalog-ble" "stdatalog-monitor")
+
+show_usage() {
+    echo -e "${BLUE}STDatalog Service Manager${NC}"
+    echo "Usage: $0 [command] [service]"
+    echo ""
+    echo "Commands:"
+    echo "  status     - Show status of all services"
+    echo "  start      - Start a service"
+    echo "  stop       - Stop a service"  
+    echo "  restart    - Restart a service"
+    echo "  logs       - Show recent logs"
+    echo "  tail       - Follow logs in real-time"
+    echo "  dashboard  - Open web dashboard"
+    echo ""
+    echo "Services:"
+    echo "  cli        - STDatalog CLI Logger"
+    echo "  ble        - STDatalog BLE Controller" 
+    echo "  monitor    - Web Dashboard"
+    echo "  all        - All services (for start/stop/restart)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 status"
+    echo "  $0 start cli"
+    echo "  $0 restart ble"
+    echo "  $0 logs cli"
+    echo "  $0 tail ble"
+    echo "  $0 dashboard"
+}
+
+get_service_name() {
+    case $1 in
+        "cli") echo "stdatalog-cli" ;;
+        "ble") echo "stdatalog-ble" ;;
+        "monitor") echo "stdatalog-monitor" ;;
+        "all") echo "all" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+show_status() {
+    echo -e "${BLUE}📊 STDatalog Service Status${NC}"
+    echo "================================================"
+    
+    for service in "${SERVICES[@]}"; do
+        status=$(systemctl is-active $service 2>/dev/null || echo "inactive")
+        enabled=$(systemctl is-enabled $service 2>/dev/null || echo "disabled")
+        
+        case $service in
+            "stdatalog-cli")
+                name="CLI Logger"
+                desc="(Manual restart only)"
+                ;;
+            "stdatalog-ble") 
+                name="BLE Controller"
+                desc="(Auto-restart enabled)"
+                ;;
+            "stdatalog-monitor")
+                name="Web Dashboard"
+                desc="(Always running)"
+                ;;
+        esac
+        
+        if [ "$status" = "active" ]; then
+            echo -e "🟢 ${name}: ${GREEN}${status}${NC} | ${enabled} ${desc}"
+        elif [ "$status" = "inactive" ]; then
+            echo -e "🔴 ${name}: ${RED}${status}${NC} | ${enabled} ${desc}"
+        else
+            echo -e "🟡 ${name}: ${YELLOW}${status}${NC} | ${enabled} ${desc}"
+        fi
+    done
+    
+    echo ""
+    echo -e "${BLUE}🌐 Dashboard:${NC} http://$(hostname -I | cut -d' ' -f1):8080"
+    
+    # Show acquisition folder stats
+    if [ -d "/home/kirwinr/Documents/stdatalog-pysdk/acquisition_data" ]; then
+        acq_count=$(find /home/kirwinr/Documents/stdatalog-pysdk/acquisition_data -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+        cut_count=$(find /home/kirwinr/Documents/stdatalog-pysdk/acquisition_data -mindepth 1 -maxdepth 1 -type d -name "cut_*" 2>/dev/null | wc -l)
+        echo -e "${BLUE}📁 Acquisition folders:${NC} ${acq_count} total, ${cut_count} cut folders"
+    fi
+}
+
+control_service() {
+    local action=$1
+    local service_arg=$2
+    local service_name=$(get_service_name $service_arg)
+    
+    if [ "$service_name" = "all" ]; then
+        for service in "${SERVICES[@]}"; do
+            echo -e "${BLUE}${action^}ing ${service}...${NC}"
+            sudo systemctl $action $service
+        done
+    else
+        echo -e "${BLUE}${action^}ing ${service_name}...${NC}"
+        sudo systemctl $action $service_name
+    fi
+    
+    echo -e "${GREEN}✅ Done${NC}"
+}
+
+show_logs() {
+    local service_arg=$1
+    local service_name=$(get_service_name $service_arg)
+    
+    case $service_name in
+        "stdatalog-cli")
+            echo -e "${BLUE}📋 CLI Logger Logs (last 50 lines):${NC}"
+            tail -n 50 /home/kirwinr/logs/stdatalog-cli.log 2>/dev/null || echo "No logs found"
+            ;;
+        "stdatalog-ble")
+            echo -e "${BLUE}📋 BLE Controller Logs (last 50 lines):${NC}"
+            tail -n 50 /home/kirwinr/logs/stdatalog-ble.log 2>/dev/null || echo "No logs found"
+            ;;
+        "stdatalog-monitor")
+            echo -e "${BLUE}📋 Web Dashboard Logs (last 50 lines):${NC}"
+            tail -n 50 /home/kirwinr/logs/service-monitor.log 2>/dev/null || echo "No logs found"
+            ;;
+        *)
+            echo -e "${RED}❌ Unknown service: $service_arg${NC}"
+            return 1
+            ;;
+    esac
+}
+
+tail_logs() {
+    local service_arg=$1
+    local service_name=$(get_service_name $service_arg)
+    
+    case $service_name in
+        "stdatalog-cli")
+            echo -e "${BLUE}📋 Following CLI Logger logs (Ctrl+C to exit):${NC}"
+            tail -f /home/kirwinr/logs/stdatalog-cli.log
+            ;;
+        "stdatalog-ble")
+            echo -e "${BLUE}📋 Following BLE Controller logs (Ctrl+C to exit):${NC}"
+            tail -f /home/kirwinr/logs/stdatalog-ble.log
+            ;;
+        "stdatalog-monitor")
+            echo -e "${BLUE}📋 Following Web Dashboard logs (Ctrl+C to exit):${NC}"
+            tail -f /home/kirwinr/logs/service-monitor.log
+            ;;
+        *)
+            echo -e "${RED}❌ Unknown service: $service_arg${NC}"
+            return 1
+            ;;
+    esac
+}
+
+open_dashboard() {
+    local url="http://localhost:8080"
+    echo -e "${BLUE}🌐 Opening dashboard at ${url}${NC}"
+    
+    # Try to open browser
+    if command -v xdg-open > /dev/null; then
+        xdg-open $url
+    elif command -v firefox > /dev/null; then
+        firefox $url &
+    elif command -v chromium-browser > /dev/null; then
+        chromium-browser $url &
+    else
+        echo -e "${YELLOW}⚠️ No browser found. Please open manually: ${url}${NC}"
+    fi
+}
+
+# Main logic
+case $1 in
+    "status"|"")
+        show_status
+        ;;
+    "start"|"stop"|"restart")
+        if [ -z "$2" ]; then
+            echo -e "${RED}❌ Service name required${NC}"
+            show_usage
+            exit 1
+        fi
+        control_service $1 $2
+        ;;
+    "logs")
+        if [ -z "$2" ]; then
+            echo -e "${RED}❌ Service name required${NC}"
+            show_usage
+            exit 1
+        fi
+        show_logs $2
+        ;;
+    "tail")
+        if [ -z "$2" ]; then
+            echo -e "${RED}❌ Service name required${NC}"
+            show_usage
+            exit 1
+        fi
+        tail_logs $2
+        ;;
+    "dashboard")
+        open_dashboard
+        ;;
+    "help"|"-h"|"--help")
+        show_usage
+        ;;
+    *)
+        echo -e "${RED}❌ Unknown command: $1${NC}"
+        show_usage
+        exit 1
+        ;;
+esac
