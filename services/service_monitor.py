@@ -184,11 +184,47 @@ HTML_TEMPLATE = """
         }
     </style>
     <script>
-        function refreshPage() {
-            window.location.reload();
-        }
-        // Auto-refresh every 30 seconds
-        setTimeout(refreshPage, 30000);
+    function updateDashboard() {
+        fetch("/api/status")
+            .then(response => response.json())
+            .then(data => {
+                // Update service status
+                for (const [service_id, info] of Object.entries(data.services)) {
+                    // Uptime
+                    document.getElementById(service_id + "-uptime").textContent = info.uptime;
+                    // Memory
+                    document.getElementById(service_id + "-memory").textContent = info.memory;
+                    // Status LED
+                    let led = document.getElementById(service_id + "-led");
+                    led.className = "led " + (info.status === "active" ? "green" : "red");
+                    // Status Text
+                    let statusText = document.getElementById(service_id + "-status");
+                    statusText.textContent = info.status.toUpperCase() + (info.auto_restart ? " (Auto-restart)" : " (Manual)");
+                    statusText.className = "service-status " + (info.status === "active" ? "status-active" : "status-inactive");
+                }
+
+                // Update system stats
+                document.getElementById("acq_folders").textContent = data.system.acquisition_folders;
+                document.getElementById("cut_folders").textContent = data.system.cut_folders;
+                document.getElementById("disk_usage").textContent = data.system.disk_usage + "%";
+
+                // Update logs per service
+                for (const [service_id, log_content] of Object.entries(data.system.logs)) {
+                    const logDiv = document.getElementById(service_id + "-log");
+                    if (logDiv) logDiv.textContent = log_content;
+                }
+
+                // Update timestamp
+                document.getElementById("timestamp").textContent = (new Date(data.system.timestamp)).toLocaleString();
+            })
+            .catch(error => {
+                // Optional: handle fetch error
+                console.log("AJAX fetch failed", error);
+            });
+    }
+
+    // Update every second
+    setInterval(updateDashboard, 1000);
     </script>
 </head>
 <body>
@@ -196,30 +232,32 @@ HTML_TEMPLATE = """
         <h1>🔧 STDatalog Service Monitor</h1>
         
         <div class="refresh-notice">
-            ⏱️ Page auto-refreshes every 30 seconds | Last updated: {{ timestamp }}
+            ⏱️ Live updates (every 1 second) | Last updated: <span id="timestamp">{{ timestamp }}</span>
         </div>
         
         <div class="service-grid">
             {% for service_id, service_info in services.items() %}
             <div class="service-card {{ 'active' if service_info.status == 'active' else 'inactive' }}">
                 <div class="service-header">
-                    <div class="led {{ 'green' if service_info.status == 'active' else 'red' }}"></div>
+                    <!-- ADD id to LED -->
+                    <div class="led {{ 'green' if service_info.status == 'active' else 'red' }}" id="{{ service_id }}-led"></div>
                     <div>
                         <div class="service-name">{{ service_info.config.name }}</div>
-                        <div class="service-status {{ 'status-active' if service_info.status == 'active' else 'status-inactive' }}">
-                            {{ service_info.status.upper() }}
-                            {% if service_info.config.auto_restart %}(Auto-restart){% else %}(Manual){% endif %}
+                        <!-- ADD id to status -->
+                        <div class="service-status {{ 'status-active' if service_info.status == 'active' else 'status-inactive' }}" id="{{ service_id }}-status">
+                            {{ service_info.status.upper() }}{% if service_info.config.auto_restart %} (Auto-restart){% else %} (Manual){% endif %}
                         </div>
                     </div>
                 </div>
-                
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value">{{ service_info.uptime }}</div>
+                        <!-- ADD id to uptime -->
+                        <div class="stat-value" id="{{ service_id }}-uptime">{{ service_info.uptime }}</div>
                         <div class="stat-label">Uptime</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">{{ service_info.memory }}</div>
+                        <!-- ADD id to memory -->
+                        <div class="stat-value" id="{{ service_id }}-memory">{{ service_info.memory }}</div>
                         <div class="stat-label">Memory</div>
                     </div>
                 </div>
@@ -248,15 +286,15 @@ HTML_TEMPLATE = """
         
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value">{{ acq_folders }}</div>
+                <div class="stat-value" id="acq_folders">{{ acq_folders }}</div>
                 <div class="stat-label">Acquisition Folders</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ cut_folders }}</div>
+                <div class="stat-value" id="cut_folders">{{ cut_folders }}</div>
                 <div class="stat-label">Cut Folders</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ disk_usage }}%</div>
+                <div class="stat-value" id="disk_usage">{{ disk_usage }}%</div>
                 <div class="stat-label">Disk Usage</div>
             </div>
         </div>
@@ -268,7 +306,7 @@ HTML_TEMPLATE = """
                 {% for service_id, log_content in recent_logs.items() %}
                 <div class="log-column">
                     <h4>🔧 {{ services[service_id]['config']['name'] if service_id in services else service_id }} ({{ service_id }})</h4>
-                    <div class="log-content">{{ log_content }}</div>
+                    <div class="log-content" id="{{ service_id }}-log">{{ log_content }}</div>
                 </div>
                 {% endfor %}
             </div>
@@ -431,7 +469,6 @@ def control_service(service_id):
 
 @app.route("/api/status")
 def api_status():
-    """JSON API endpoint for service status"""
     services = {}
     for service_id, config in SERVICES.items():
         info = get_service_info(service_id)
@@ -444,14 +481,16 @@ def api_status():
         }
     
     acq_folders, cut_folders = get_acquisition_stats()
-    
+    logs = get_recent_logs() 
+
     return jsonify({
         'services': services,
         'system': {
             'acquisition_folders': acq_folders,
             'cut_folders': cut_folders,
             'disk_usage': get_disk_usage(),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'logs': logs
         }
     })
 
