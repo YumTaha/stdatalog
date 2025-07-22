@@ -29,7 +29,7 @@ SERVICES = {
 }
 
 # Acquisition folder monitoring
-ACQ_FOLDER = "/home/kirwinr/Documents/stdatalog-pysdk/acquisition_data"
+ACQ_FOLDER = "/home/kirwinr/Desktop/stdatalog/acquisition_data"
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -152,6 +152,28 @@ HTML_TEMPLATE = """
             white-space: pre-wrap; 
             font-size: 12px;
         }
+        .logs-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        .log-column {
+            flex: 1;
+            background: #2c3e50;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .log-column h4 {
+            margin: 0 0 15px 0;
+            color: #f39c12;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            border-bottom: 2px solid #f39c12;
+            padding: 8px 0;
+            background: #34495e;
+            border-radius: 4px;
+        }
         .refresh-notice { 
             background: #f39c12; 
             color: white; 
@@ -241,8 +263,15 @@ HTML_TEMPLATE = """
         
         {% if recent_logs %}
         <div class="log-section">
-            <h3>📋 Recent Logs (Last 50 lines combined)</h3>
-            <div class="log-content">{{ recent_logs }}</div>
+            <h3>📋 Recent Logs (Last 25 lines per service)</h3>
+            <div class="logs-container">
+                {% for service_id, log_content in recent_logs.items() %}
+                <div class="log-column">
+                    <h4>🔧 {{ services[service_id]['config']['name'] if service_id in services else service_id }} ({{ service_id }})</h4>
+                    <div class="log-content">{{ log_content }}</div>
+                </div>
+                {% endfor %}
+            </div>
         </div>
         {% endif %}
     </div>
@@ -327,14 +356,14 @@ def get_acquisition_stats():
 def get_disk_usage():
     """Get disk usage percentage for the workspace"""
     try:
-        usage = psutil.disk_usage('/home/kirwinr/Documents/stdatalog-pysdk')
+        usage = psutil.disk_usage('/home/kirwinr/Desktop/stdatalog')
         return int(usage.percent)
     except:
         return 0
 
 def get_recent_logs():
-    """Get recent log entries from both services"""
-    logs = []
+    """Get recent log entries from both services separately"""
+    service_logs = {}
     for service_id, config in SERVICES.items():
         log_file = config['log_file']
         if os.path.exists(log_file):
@@ -343,13 +372,13 @@ def get_recent_logs():
                     lines = f.readlines()
                     # Get last 25 lines from each service
                     recent = lines[-25:] if len(lines) > 25 else lines
-                    for line in recent:
-                        logs.append(f"[{service_id}] {line.strip()}")
+                    service_logs[service_id] = ''.join(recent) if recent else "No recent logs available"
             except:
-                pass
+                service_logs[service_id] = "Error reading log file"
+        else:
+            service_logs[service_id] = "Log file not found"
     
-    # Return last 50 combined log lines
-    return '\n'.join(logs[-50:]) if logs else "No recent logs available"
+    return service_logs
 
 @app.route("/")
 def dashboard():
@@ -389,7 +418,13 @@ def control_service(service_id):
         return "Invalid action", 400
     
     try:
-        subprocess.run(['systemctl', action, service_id], check=True)
+        # Clear the log file before performing the action
+        log_file = SERVICES[service_id]['log_file']
+        if os.path.exists(log_file):
+            with open(log_file, 'w') as f:
+                f.write(f"=== Log cleared - {action} action at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+        
+        subprocess.run(['sudo', 'systemctl', action, service_id], check=True)
         return redirect('/')
     except subprocess.CalledProcessError as e:
         return f"Failed to {action} service: {e}", 500

@@ -23,7 +23,7 @@ check_sudo() {
 # Install required Python packages
 install_dependencies() {
     echo -e "${BLUE}📦 Installing Python dependencies...${NC}"
-    /home/kirwinr/Documents/stdatalog-pysdk/.venv/bin/pip install flask psutil
+    /home/kirwinr/Desktop/stdatalog/.venv/bin/pip install flask psutil
 }
 
 # Create log directory
@@ -41,7 +41,7 @@ install_services() {
     echo -e "${BLUE}⚙️ Installing systemd service files...${NC}"
     
     # Copy service files
-    sudo cp /home/kirwinr/Documents/stdatalog-pysdk/services/*.service /etc/systemd/system/
+    sudo cp /home/kirwinr/Desktop/stdatalog/services/*.service /etc/systemd/system/
     
     # Reload systemd
     sudo systemctl daemon-reload

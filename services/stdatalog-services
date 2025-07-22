@@ -86,9 +86,9 @@ show_status() {
     echo -e "${BLUE}🌐 Dashboard:${NC} http://$(hostname -I | cut -d' ' -f1):8080"
     
     # Show acquisition folder stats
-    if [ -d "/home/kirwinr/Documents/stdatalog-pysdk/acquisition_data" ]; then
-        acq_count=$(find /home/kirwinr/Documents/stdatalog-pysdk/acquisition_data -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
-        cut_count=$(find /home/kirwinr/Documents/stdatalog-pysdk/acquisition_data -mindepth 1 -maxdepth 1 -type d -name "cut_*" 2>/dev/null | wc -l)
+    if [ -d "/home/kirwinr/Desktop/stdatalog/acquisition_data" ]; then
+        acq_count=$(find /home/kirwinr/Desktop/stdatalog/acquisition_data -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+        cut_count=$(find /home/kirwinr/Desktop/stdatalog/acquisition_data -mindepth 1 -maxdepth 1 -type d -name "cut_*" 2>/dev/null | wc -l)
         echo -e "${BLUE}📁 Acquisition folders:${NC} ${acq_count} total, ${cut_count} cut folders"
     fi
 }

@@ -13,7 +13,7 @@ This directory contains systemd service files and management tools for running y
 
 1. **Install the services:**
    ```bash
-   cd /home/kirwinr/Documents/stdatalog-pysdk/services
+   cd /home/kirwinr/Desktop/stdatalog/services
    ./setup_services.sh
    ```
 
