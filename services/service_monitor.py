@@ -135,13 +135,30 @@ HTML_TEMPLATE = """
         .service-card.active { border-color: #27ae60; background: #f8fff8; }
         .service-card.inactive { border-color: #e74c3c; background: #fff8f8; }
         .service-card.compact { 
-            padding: 15px; 
+            grid-column: 1 / -1; /* Span all columns */
+            padding: 12px 20px; 
             background: #f8f9fa; 
             border: 1px solid #ddd;
             min-height: auto;
         }
         .service-card.compact.active { border-color: #17a2b8; background: #f0f9ff; }
         .service-card.compact.inactive { border-color: #6c757d; background: #f8f9fa; }
+        .compact-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        .compact-left {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+        .compact-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
         .usb-info { 
             font-size: 12px; 
             color: #6c757d; 
@@ -377,35 +394,37 @@ HTML_TEMPLATE = """
             {% if service_info.config.get('compact', False) %}
             <!-- Compact USB Service -->
             <div class="service-card compact {{ 'active' if service_info.status == 'active' else 'inactive' }}">
-                <div class="service-header">
-                    <div class="led {{ 'green' if service_info.status == 'active' else 'red' }}" id="{{ service_id }}-led"></div>
-                    <div>
-                        <div class="service-name">📀 {{ service_info.config.name }}</div>
-                        <div class="service-status {{ 'status-active' if service_info.status == 'active' else 'status-inactive' }}" id="{{ service_id }}-status">
-                            {{ service_info.status.upper() }}{% if service_info.config.auto_restart %} (Auto-restart){% else %} (Manual){% endif %}
+                <div class="compact-content">
+                    <div class="compact-left">
+                        <div class="led {{ 'green' if service_info.status == 'active' else 'red' }}" id="{{ service_id }}-led"></div>
+                        <div style="margin-right: 20px;">
+                            <div class="service-name">📀 {{ service_info.config.name }}</div>
+                            <div class="service-status {{ 'status-active' if service_info.status == 'active' else 'status-inactive' }}" id="{{ service_id }}-status">
+                                {{ service_info.status.upper() }}{% if service_info.config.auto_restart %} (Auto-restart){% else %} (Manual){% endif %}
+                            </div>
                         </div>
                         <div class="usb-info">
-                            USB: <span class="usb-status usb-disconnected" id="usb-status">NOT DETECTED</span><br>
-                            <small id="usb-info">Insert USB stick to begin data transfer</small>
+                            USB: <span class="usb-status usb-disconnected" id="usb-status">NOT DETECTED</span>
+                            <small id="usb-info" style="display: block; margin-top: 2px;">Insert USB stick to begin data transfer</small>
                         </div>
                     </div>
-                </div>
-                <div style="margin-top: 10px;">
-                    <form method="post" action="/control/{{ service_id }}" style="display: inline;">
-                        <input type="hidden" name="action" value="restart">
-                        <button type="submit" class="btn btn-restart" style="padding: 5px 10px; font-size: 12px;">🔄</button>
-                    </form>
-                    {% if service_info.status == 'active' %}
-                    <form method="post" action="/control/{{ service_id }}" style="display: inline;">
-                        <input type="hidden" name="action" value="stop">
-                        <button type="submit" class="btn btn-stop" style="padding: 5px 10px; font-size: 12px;">⏹️</button>
-                    </form>
-                    {% else %}
-                    <form method="post" action="/control/{{ service_id }}" style="display: inline;">
-                        <input type="hidden" name="action" value="start">
-                        <button type="submit" class="btn btn-start" style="padding: 5px 10px; font-size: 12px;">▶️</button>
-                    </form>
-                    {% endif %}
+                    <div class="compact-right">
+                        <form method="post" action="/control/{{ service_id }}" style="display: inline;">
+                            <input type="hidden" name="action" value="restart">
+                            <button type="submit" class="btn btn-restart" style="padding: 8px 12px; font-size: 12px;">🔄</button>
+                        </form>
+                        {% if service_info.status == 'active' %}
+                        <form method="post" action="/control/{{ service_id }}" style="display: inline;">
+                            <input type="hidden" name="action" value="stop">
+                            <button type="submit" class="btn btn-stop" style="padding: 8px 12px; font-size: 12px;">⏹️</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="/control/{{ service_id }}" style="display: inline;">
+                            <input type="hidden" name="action" value="start">
+                            <button type="submit" class="btn btn-start" style="padding: 8px 12px; font-size: 12px;">▶️</button>
+                        </form>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% else %}
