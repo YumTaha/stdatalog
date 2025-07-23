@@ -306,7 +306,7 @@
                     "imp23absu_mic": {
                         "odr": 4,
                         "aop": 0,
-                        "enable": false,
+                        "enable": true,
                         "volume": 100,
                         "resolution": 0,
                         "samples_per_ts": 1000,
@@ -327,7 +327,7 @@
                     "imp34dt05_mic": {
                         "odr": 2,
                         "aop": 0,
-                        "enable": false,
+                        "enable": true,
                         "volume": 100,
                         "resolution": 0,
                         "samples_per_ts": 1000,

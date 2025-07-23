@@ -29,7 +29,7 @@ SOCKET_PORT = 8888
 # Acquisition folder management
 ACQ_FOLDER = "../acquisition_data"  # must match your CLI logger's OUTPUT_FOLDER
 MAX_SUBFOLDERS = 10                 # for general cleanup
-MAX_CUT_FOLDERS = 5                 # set to -1 to disable cut folder cleanup
+MAX_CUT_FOLDERS = 20                 # set to -1 to disable cut folder cleanup
 FOLDER_CHECK_INTERVAL = 10          # seconds between folder checks
 
 # Thresholds for BLE logic
