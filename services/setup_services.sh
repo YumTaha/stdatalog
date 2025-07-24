@@ -88,7 +88,6 @@ show_status() {
     
     echo ""
     echo -e "${BLUE}🌐 Dashboard URLs:${NC}"
-    echo "  Local:    http://localhost:8080"
     echo "  Network:  http://$(hostname -I | cut -d' ' -f1):8080"
     echo ""
     echo -e "${BLUE}📋 Useful Commands:${NC}"

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # BLE config
 DEVICE_NAME = "Speed"
+DEVICE_MAC_ADDRESS = "F9:51:AC:0F:75:9E" 
 SERVICE_UUID = "04403980-1579-4b57-81eb-bfcdce019b9e"
 CHAR_UUID = "04403980-1579-4b57-81eb-bfcdce019b9f"
 
@@ -29,7 +30,7 @@ SOCKET_PORT = 8888
 # Acquisition folder management
 ACQ_FOLDER = "../acquisition_data"  # must match your CLI logger's OUTPUT_FOLDER
 MAX_SUBFOLDERS = 10                 # for general cleanup
-MAX_CUT_FOLDERS = 20                 # set to -1 to disable cut folder cleanup
+MAX_CUT_FOLDERS = -1                 # set to -1 to disable cut folder cleanup
 FOLDER_CHECK_INTERVAL = 10          # seconds between folder checks
 
 # Thresholds for BLE logic
@@ -113,32 +114,11 @@ async def ble_and_ipc_task(sock):
         logger.error("Failed to connect to CLI logger after maximum retries. Exiting.")
         return
 
-    logger.info("Scanning for BLE devices (5 seconds)...")
-    device = None
-    try:
-        devices = await BleakScanner.discover(timeout=5.0)
-        logger.info(f"Found {len(devices)} BLE devices")
-        
-        for d in devices:
-            logger.debug(f"Device: {d.name} ({d.address})")
-            if (d.name and d.name == DEVICE_NAME) or (getattr(d, "local_name", None) == DEVICE_NAME):
-                device = d
-                break
-    except Exception as e:
-        logger.error(f"Error during BLE scanning: {e}")
-        sock.close()
-        return
-
-    if not device:
-        logger.error(f"Device named '{DEVICE_NAME}' not found.")
-        sock.close()
-        return
-
-    logger.info(f"Found device: {device.name} ({device.address}), connecting to BLE...")
+    logger.info(f"Connecting to BLE device with MAC: {DEVICE_MAC_ADDRESS} ...")
     sent_state = None  # None, "started", "stopped"
 
     try:
-        async with BleakClient(device.address) as client:
+        async with BleakClient(DEVICE_MAC_ADDRESS) as client:
             if not client.is_connected:
                 logger.error("Could not connect to BLE device.")
                 sock.close()

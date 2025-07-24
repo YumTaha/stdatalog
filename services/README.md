@@ -6,6 +6,7 @@ This directory contains systemd service files and management tools for running y
 
 - **🔄 STDatalog CLI Service**: Manual restart only (perfect for post-hardware-reset workflow)
 - **🔄 STDatalog BLE Service**: Auto-restart on failure  
+- **📀 USB Data Offload Service**: Automatic transfer of acquisition data to USB drives
 - **🌐 Web Dashboard**: Real-time monitoring and control at http://localhost:8080
 - **📊 Service Management**: Easy command-line tools for control
 
@@ -27,6 +28,7 @@ This directory contains systemd service files and management tools for running y
    ./stdatalog-services status
    ./stdatalog-services start cli
    ./stdatalog-services restart ble
+   ./stdatalog-services start usb
    ```
 
 ## 📋 Service Descriptions
@@ -42,6 +44,13 @@ This directory contains systemd service files and management tools for running y
 - **Restart Policy**: Auto-restart on failure (`Restart=on-failure`)
 - **Use Case**: Always running, triggers CLI acquisitions
 - **Log Location**: `/home/kirwinr/logs/stdatalog-ble.log`
+
+### USB Data Offload (`stdatalog-usboffload`)
+- **Purpose**: Automatically transfers acquisition data to any inserted USB drive
+- **Restart Policy**: Auto-restart on failure (`Restart=always`)
+- **Use Case**: Runs continuously, monitors for USB drives and transfers cut folders
+- **Features**: Detects any USB drive, maintains transfer history, keeps minimum folders
+- **Log Location**: `/home/kirwinr/logs/stdatalog-usboffload.log`
 
 ### Service Monitor (`stdatalog-monitor`)
 - **Purpose**: Web dashboard for monitoring and control
@@ -61,6 +70,7 @@ This directory contains systemd service files and management tools for running y
 ./stdatalog-services start cli
 ./stdatalog-services stop ble  
 ./stdatalog-services restart monitor
+./stdatalog-services start usb
 
 # Control all services at once
 ./stdatalog-services start all
@@ -69,6 +79,7 @@ This directory contains systemd service files and management tools for running y
 # View logs
 ./stdatalog-services logs cli
 ./stdatalog-services tail ble    # Follow logs in real-time
+./stdatalog-services logs usb
 
 # Open web dashboard
 ./stdatalog-services dashboard
@@ -82,14 +93,17 @@ sudo systemctl start stdatalog-cli
 sudo systemctl stop stdatalog-cli
 sudo systemctl restart stdatalog-ble
 sudo systemctl status stdatalog-monitor
+sudo systemctl start stdatalog-usboffload
 
 # View logs
 journalctl -u stdatalog-cli -f
 tail -f /home/kirwinr/logs/stdatalog-ble.log
+tail -f /home/kirwinr/logs/stdatalog-usboffload.log
 
 # Enable/disable services
 sudo systemctl enable stdatalog-ble
 sudo systemctl disable stdatalog-cli
+sudo systemctl enable stdatalog-usboffload
 ```
 
 ## 🌐 Web Dashboard Features
@@ -98,10 +112,11 @@ The web dashboard provides:
 
 - **🟢🔴 Visual Status Indicators**: Green/red LEDs for each service
 - **📊 System Statistics**: Memory usage, uptime, disk usage
-- **📁 Acquisition Monitoring**: Count of acquisition and cut folders
-- **🔄 Service Control**: Start/stop/restart buttons
-- **📋 Live Logs**: Recent log entries from all services
-- **🔄 Auto-refresh**: Updates every 30 seconds
+- **📁 Acquisition Monitoring**: Count of acquisition folders (inside cut_* folders) and cut folders
+- **📀 USB Status**: Real-time USB drive detection and space information
+- **🔄 Service Control**: Start/stop/restart buttons for all services
+- **📋 Live Logs**: Recent log entries from CLI and BLE services (USB logs excluded)
+- **🔄 Auto-refresh**: Updates every 1 second for real-time monitoring
 
 ## 📁 File Structure
 
@@ -110,6 +125,7 @@ services/
 ├── stdatalog-cli.service      # CLI service definition
 ├── stdatalog-ble.service      # BLE service definition  
 ├── stdatalog-monitor.service  # Web dashboard service
+├── stdatalog-usboffload.service # USB data transfer service
 ├── service_monitor.py         # Web dashboard application
 ├── setup_services.sh          # Installation script
 ├── stdatalog-services         # Management script
@@ -121,13 +137,19 @@ services/
 1. **Initial Setup**: Run `./setup_services.sh` once
 2. **Normal Operation**: 
    - BLE service runs automatically
+   - USB offload service runs automatically (transfers data when USB inserted)
    - Web dashboard always available
    - Start CLI manually when needed
-3. **After Hardware Reset**:
+3. **USB Data Transfer**:
+   - Insert any USB drive
+   - Service automatically detects and transfers oldest cut folders
+   - Maintains transfer history to avoid duplicates
+   - Always keeps minimum number of folders on local storage
+4. **After Hardware Reset**:
    - Reset your STWIN board
    - Go to web dashboard or run `./stdatalog-services start cli`
    - CLI will connect and resume operation
-4. **Monitoring**: Check web dashboard or `./stdatalog-services status`
+5. **Monitoring**: Check web dashboard or `./stdatalog-services status`
 
 ## 🐛 Troubleshooting
 
@@ -163,6 +185,21 @@ systemctl status bluetooth
 
 # Restart BLE service
 ./stdatalog-services restart ble
+```
+
+### USB offload not working:
+```bash
+# Check USB service status
+./stdatalog-services status
+
+# Check if USB is detected
+ls /media/$USER/
+
+# Check USB service logs
+./stdatalog-services logs usb
+
+# Restart USB service
+./stdatalog-services restart usb
 ```
 
 ## 🔄 Backup & Recovery

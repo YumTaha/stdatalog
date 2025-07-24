@@ -688,7 +688,7 @@ if __name__ == "__main__":
     os.makedirs('/home/kirwinr/logs', exist_ok=True)
     
     print("🌐 STDatalog Service Monitor starting...")
-    print("📊 Dashboard available at: http://localhost:8080")
-    print("🔌 API endpoint available at: http://localhost:8080/api/status")
+    print("📊 Dashboard available at: http://10.0.71.110:8080/")
+    print("🔌 API endpoint available at: http://10.0.71.110:8080/api/status")
     
     app.run(host="0.0.0.0", port=8080, debug=False)
