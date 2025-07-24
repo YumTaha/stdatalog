@@ -4,6 +4,7 @@ import asyncio
 import shutil
 import re
 import getpass
+import zipfile
 
 ACQ_FOLDER = "/home/kirwinr/Desktop/stdatalog/acquisition_data"
 POLL_INTERVAL = 4  # seconds
@@ -74,17 +75,30 @@ async def monitor_usb():
                         folder_size = get_folder_size(src)
                         if folder_size > free:
                             print(f"[USB] Not enough space for {folder} ({folder_size // (1024*1024)} MB needed, {free // (1024*1024)} MB free). Waiting...")
-                        else:
-                            print(f"[USB] Copying {folder} to USB ({folder_size // (1024*1024)} MB)...")
-                            try:
-                                shutil.copytree(src, dst)
-                                print(f"[USB] Copy successful. Recording in {TRANSFER_TRACK_FILE}. Deleting original...")
-                                with open(track_path, "a") as f:
-                                    f.write(folder + "\n")
-                                shutil.rmtree(src)
-                                print(f"[USB] Deleted {src}")
-                            except Exception as e:
-                                print(f"[USB] Error copying {folder}: {e}")
+                        print(f"[USB] Zipping {folder}...")
+                        zip_name = folder + ".zip"
+                        zip_path = os.path.join(ACQ_FOLDER, zip_name)
+
+                        try:
+                            # Create the zip file in the acquisition folder
+                            shutil.make_archive(os.path.splitext(zip_path)[0], 'zip', src)
+                            print(f"[USB] Zip created: {zip_path}")
+
+                            # Move zip file to USB
+                            usb_zip_path = os.path.join(usb_mount, zip_name)
+                            shutil.move(zip_path, usb_zip_path)
+                            print(f"[USB] Zip moved to USB: {usb_zip_path}")
+
+                            # Record in transferred.txt
+                            with open(track_path, "a") as f:
+                                f.write(folder + "\n")
+
+                            # Delete original folder
+                            shutil.rmtree(src)
+                            print(f"[USB] Deleted folder: {src}")
+
+                        except Exception as e:
+                            print(f"[USB] Error in zipping/copying {folder}: {e}")
                     else:
                         print("[USB] No new folders to transfer.")
                 else:
