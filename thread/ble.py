@@ -5,16 +5,9 @@ import os
 import shutil
 import sys
 import logging
+import argparse
 from bleak import BleakClient, BleakScanner
 
-# Logging config
-logging.basicConfig(
-    level=logging.INFO, #TODO CHANGE TO "DEBUG" IF YOU WANT TO SEE THE VALUES
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
 logger = logging.getLogger(__name__)
 
 # BLE config
@@ -236,7 +229,8 @@ async def main():
     try:
         tasks = [
             asyncio.create_task(ble_and_ipc_task(controller)),
-            asyncio.create_task(cut_folder_manager()),
+            # Uncomment and implement if you want folder cleanup:
+            # asyncio.create_task(cut_folder_manager()),
         ]
         await asyncio.gather(*tasks)
     except KeyboardInterrupt:
@@ -258,6 +252,16 @@ async def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Dual BLE Scissor Saw Logger")
+    parser.add_argument('--log', default="INFO", help="Set log level: DEBUG, INFO, WARNING, ERROR, CRITICAL")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log.upper(), logging.INFO),
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+    logger.setLevel(getattr(logging, args.log.upper(), logging.INFO))
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
