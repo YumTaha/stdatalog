@@ -9,7 +9,7 @@ from bleak import BleakClient, BleakScanner
 
 # Logging config
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO, #TODO CHANGE TO "DEBUG" IF YOU WANT TO SEE THE VALUES
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -108,7 +108,7 @@ async def ble_speed_task(controller):
 
             def notification_handler(sender, data):
                 value = parse_float32_le(data)
-                logger.info(f"Speed: {value:.3f} rad/s")
+                logger.debug(f"Speed: {value:.3f} rad/s")
                 controller.speed_active = value >= START_THRESHOLD_SP
                 asyncio.create_task(controller.update_data_collection_state())
 
@@ -170,7 +170,7 @@ async def ble_feedrate_task(controller, ready_event):
             def notification_handler(sender, data):
                 raw_v = parse_float32_le(data)
                 v_in_min = round(raw_v * 39.3701 * 60, 3)
-                logger.info(f"Feedrate: {v_in_min} in/min")
+                logger.debug(f"Feedrate: {v_in_min} in/min")
                 controller.feedrate_active = v_in_min < DOWN_THRESHOLD_IN_MIN
                 asyncio.create_task(controller.update_data_collection_state())
 
