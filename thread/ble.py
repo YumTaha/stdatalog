@@ -43,6 +43,7 @@ class DataCollectionController:
         self.feedrate_active = False
         self.speed_active = False
         self.sent_state = None  # 'started' or 'stopped'
+        self.current_machine_state = None  # For state logs
         self.lock = asyncio.Lock()
         # Store client references
         self.feedrate_client = None
@@ -50,16 +51,32 @@ class DataCollectionController:
 
     async def update_data_collection_state(self):
         async with self.lock:
-            if self.feedrate_active and self.speed_active:
+            new_machine_state = None
+
+            if self.speed_active and self.feedrate_active:
+                new_machine_state = "CUTTING (blade running, moving down)"
                 if self.sent_state != 'started':
                     logger.info("Criteria met: Sending 'start'")
                     self.sock.sendall(b'start\n')
                     self.sent_state = 'started'
-            else:
+            elif self.speed_active and not self.feedrate_active:
+                new_machine_state = "BLADE RESETTING (blade running, moving up)"
                 if self.sent_state != 'stopped':
                     logger.info("Criteria NOT met: Sending 'stop'")
                     self.sock.sendall(b'stop\n')
                     self.sent_state = 'stopped'
+            else:
+                new_machine_state = "BLADE STOPPED (no spinning)"
+                if self.sent_state != 'stopped':
+                    logger.info("Criteria NOT met: Sending 'stop'")
+                    self.sock.sendall(b'stop\n')
+                    self.sent_state = 'stopped'
+
+            # Only log if the state changed, to avoid log spam
+            if new_machine_state != self.current_machine_state:
+                logger.info(f"Machine State: {new_machine_state}")
+                self.current_machine_state = new_machine_state
+
 
 async def ble_speed_task(controller):
     client = BleakClient(DEVICE_MAC_ADDRESS_SP)
