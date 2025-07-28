@@ -253,7 +253,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Dual BLE Scissor Saw Logger")
+    parser = argparse.ArgumentParser(description="Dual BLE Logger")
     parser.add_argument('--log', default="INFO", help="Set log level: DEBUG, INFO, WARNING, ERROR, CRITICAL")
     args = parser.parse_args()
 
