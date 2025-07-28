@@ -1,89 +1,123 @@
-# STDatalog Services Setup
+# Services Folder - Auto-Running Background Programs
 
-This directory contains systemd service files and management tools for running your STDatalog CLI and BLE components as Linux services with web monitoring.
+This folder contains everything needed to make your STDatalog system run **automatically in the background** like a professional service. Think of these as "background workers" that start when your computer boots up and keep running even if you're not logged in.
 
-## 🎯 What This Provides
+## 🎯 What This Does (Simple Explanation)
 
-- **🔄 STDatalog CLI Service**: Manual restart only (perfect for post-hardware-reset workflow)
-- **🔄 STDatalog BLE Service**: Auto-restart on failure  
-- **📀 USB Data Offload Service**: Automatic transfer of acquisition data to USB drives
-- **🌐 Web Dashboard**: Real-time monitoring and control at http://localhost:8080
-- **📊 Service Management**: Easy command-line tools for control
+Instead of manually starting Python scripts every time, this sets up **Linux services** that:
 
-## 🚀 Quick Setup
+- **🔄 STDatalog CLI Service**: The main data recorder (only starts when you tell it to)
+- **🔄 STDatalog BLE Service**: Watches the BLE sensors and tells CLI when to start/stop
+- **📀 USB Transfer Service**: Automatically copies data to any USB drive you plug in
+- **🌐 Web Dashboard**: A website you can open to see what's happening (http://localhost:8080)
+- **📊 Easy Controls**: Simple commands to start/stop everything
 
-1. **Install the services:**
-   ```bash
-   cd /home/kirwinr/Desktop/stdatalog/services
-   ./setup_services.sh
-   ```
+## 🚀 Quick Setup (First Time Only)
 
-2. **Access the web dashboard:**
-   ```
-   http://localhost:8080
-   ```
+**Step 1:** Install the services (makes them start automatically)
+```bash
+cd /home/kirwinr/Desktop/stdatalog/services
+./setup_services.sh
+```
 
-3. **Use the management script:**
-   ```bash
-   ./stdatalog-services status
-   ./stdatalog-services start cli
-   ./stdatalog-services restart ble
-   ./stdatalog-services start usb
-   ```
+**Step 2:** Open the web dashboard in your browser
+```
+http://localhost:8080
+```
 
-## 📋 Service Descriptions
+**Step 3:** Use simple commands to control everything
+```bash
+./stdatalog-services status        # See what's running
+./stdatalog-services start cli     # Start the data recorder  
+./stdatalog-services start ble     # Start the sensor monitor
+./stdatalog-services start usb     # Start USB auto-transfer
+./stdatalog-services restart ble   # Restart if something's stuck
+./stdatalog-services stop all      # Stop everything
+```
 
-### STDatalog CLI (`stdatalog-cli`)
-- **Purpose**: Periodic sensor data acquisition with IPC socket control
-- **Restart Policy**: Manual only (`Restart=no`)
-- **Use Case**: Start after hardware reset, stop when board disconnected
-- **Log Location**: `/home/kirwinr/logs/stdatalog-cli.log`
+## 📋 What Each Service Does (Detailed)
 
-### STDatalog BLE (`stdatalog-ble`) 
-- **Purpose**: BLE monitoring with rotational velocity thresholds
-- **Restart Policy**: Auto-restart on failure (`Restart=on-failure`)
-- **Use Case**: Always running, triggers CLI acquisitions
-- **Log Location**: `/home/kirwinr/logs/stdatalog-ble.log`
+### STDatalog CLI (`stdatalog-cli`) - The Main Data Recorder
+- **What it does**: Records sensor data from your STDatalog hardware to files
+- **When to use**: Start this AFTER you've reset/connected your hardware
+- **Auto-restart**: NO - you control when it starts/stops
+- **Log file**: `/home/kirwinr/logs/stdatalog-cli.log` (check here if something's wrong)
+- **Think of it as**: The actual "recording button" for your data
 
-### USB Data Offload (`stdatalog-usboffload`)
-- **Purpose**: Automatically transfers acquisition data to any inserted USB drive
-- **Restart Policy**: Auto-restart on failure (`Restart=always`)
-- **Use Case**: Runs continuously, monitors for USB drives and transfers cut folders
-- **Features**: Detects any USB drive, maintains transfer history, keeps minimum folders
-- **Log Location**: `/home/kirwinr/logs/stdatalog-usboffload.log`
+### STDatalog BLE (`stdatalog-ble`) - The Smart Trigger
+- **What it does**: Watches your BLE sensors and automatically tells CLI when to record
+- **When to use**: Keep this running all the time
+- **Auto-restart**: YES - if it crashes, it starts itself again
+- **Log file**: `/home/kirwinr/logs/stdatalog-ble.log`
+- **Think of it as**: The "smart switch" that knows when your machine is cutting
 
-### Service Monitor (`stdatalog-monitor`)
-- **Purpose**: Web dashboard for monitoring and control
-- **Restart Policy**: Always restart (`Restart=always`)
-- **Use Case**: Always available for status checking
-- **Log Location**: `/home/kirwinr/logs/service-monitor.log`
+### USB Transfer (`stdatalog-usboffload`) - The Auto-Backup
+- **What it does**: Copies your data to any USB drive you plug in
+- **When to use**: Keep this running all the time  
+- **Auto-restart**: YES - always stays running
+- **Log file**: `/home/kirwinr/logs/stdatalog-usb.log`
+- **Think of it as**: Automatic backup whenever you insert a USB stick
 
-## 🛠 Management Commands
+### Service Monitor (`stdatalog-monitor`) - The Web Dashboard
+- **What it does**: Creates a website where you can see everything that's happening
+- **When to use**: Keep this running to use the web dashboard
+- **Auto-restart**: YES - always stays running
+- **Website**: http://localhost:8080
+- **Think of it as**: Your "control panel" in a web browser
 
-### Using the `stdatalog-services` script:
+## 🛠 How to Control Everything (Management Commands)
+
+### The Easy Way - Use the `stdatalog-services` script:
 
 ```bash
-# Show status of all services
+# See what's running and what's not
 ./stdatalog-services status
 
-# Start/stop/restart individual services
-./stdatalog-services start cli
-./stdatalog-services stop ble  
-./stdatalog-services restart monitor
-./stdatalog-services start usb
+# Start/stop individual things  
+./stdatalog-services start cli      # Start the data recorder
+./stdatalog-services start ble      # Start the sensor monitor
+./stdatalog-services start usb      # Start USB auto-backup
+./stdatalog-services stop ble       # Stop the sensor monitor
+./stdatalog-services restart ble    # Restart if it's stuck
 
-# Control all services at once
-./stdatalog-services start all
-./stdatalog-services stop all
+# Control everything at once
+./stdatalog-services start all      # Start everything
+./stdatalog-services stop all       # Stop everything
 
-# View logs
-./stdatalog-services logs cli
-./stdatalog-services tail ble    # Follow logs in real-time
-./stdatalog-services logs usb
+# Check what went wrong (read the logs)
+./stdatalog-services logs cli       # See CLI messages
+./stdatalog-services tail ble       # Watch BLE messages in real-time
+./stdatalog-services logs usb       # See USB transfer messages
 
-# Open web dashboard
-./stdatalog-services dashboard
+# Open the web dashboard
+./stdatalog-services dashboard      # Opens http://localhost:8080
 ```
+
+## 🌐 Web Dashboard (Super Helpful!)
+
+Open http://localhost:8080 in your web browser to see:
+- ✅ Which services are running (green = good, red = problem)
+- 📊 Real-time status of your data collection
+- 🔘 Buttons to start/stop services without using the terminal
+- 📋 Recent log messages (see what's happening)
+- 📈 System information (disk space, etc.)
+
+## 🔧 Typical Workflow (How You'll Actually Use This)
+
+### Daily Use:
+1. **Turn on your computer** → Services start automatically
+2. **Check the web dashboard** → http://localhost:8080  
+3. **Connect your STDatalog hardware** → Nothing happens yet (good!)
+4. **Start the CLI service** → `./stdatalog-services start cli`
+5. **The BLE service watches sensors** → When your machine cuts, data recording starts automatically
+6. **Plug in USB stick** → Data gets copied automatically
+7. **When done** → `./stdatalog-services stop cli` (BLE and USB keep running)
+
+### If Something Goes Wrong:
+1. **Check the web dashboard** → See which service has a problem
+2. **Look at the logs** → `./stdatalog-services logs [service-name]`
+3. **Restart the problematic service** → `./stdatalog-services restart [service-name]`
+4. **If still broken** → `./stdatalog-services stop all` then `./stdatalog-services start all`
 
 ### Using systemctl directly:
 
@@ -151,63 +185,87 @@ services/
    - CLI will connect and resume operation
 5. **Monitoring**: Check web dashboard or `./stdatalog-services status`
 
-## 🐛 Troubleshooting
+## � Troubleshooting (When Things Go Wrong)
 
-### Service won't start:
+### "Service won't start" or shows as "failed":
 ```bash
-# Check detailed status
+# Get detailed info about what went wrong
 systemctl status stdatalog-cli
-
-# Check logs
 ./stdatalog-services logs cli
 ```
 
-### Permission issues:
+### "Permission denied" errors:
 ```bash
-# Fix log file permissions
+# Fix file permissions
 sudo chown kirwinr:kirwinr /home/kirwinr/logs/stdatalog-*.log
 sudo chmod 664 /home/kirwinr/logs/stdatalog-*.log
 ```
 
-### Dashboard not accessible:
+### "Can't access web dashboard" (http://localhost:8080 doesn't work):
 ```bash
-# Check if monitor service is running
+# Check if the monitor service is running
 ./stdatalog-services status
-
-# Restart monitor service
+# If it's not running, start it
 ./stdatalog-services restart monitor
 ```
 
-### BLE connection issues:
+### "BLE sensors not connecting":
 ```bash
-# Check Bluetooth status
+# Check if Bluetooth is working on your computer
 systemctl status bluetooth
-
-# Restart BLE service
+# Restart the BLE service
 ./stdatalog-services restart ble
 ```
 
-### USB offload not working:
+### "USB stick not being detected":
 ```bash
-# Check USB service status
-./stdatalog-services status
-
-# Check if USB is detected
+# Check if your USB is mounted properly
 ls /media/$USER/
-
-# Check USB service logs
+# Look for error messages
 ./stdatalog-services logs usb
-
-# Restart USB service
+# Restart the USB service
 ./stdatalog-services restart usb
 ```
 
-## 🔄 Backup & Recovery
+## 🗂️ Important Files You Should Know About
 
-Your original files are backed up in:
+```
+services/
+├── stdatalog-cli.service      # Tells Linux how to run the data recorder
+├── stdatalog-ble.service      # Tells Linux how to run the sensor monitor
+├── stdatalog-monitor.service  # Tells Linux how to run the web dashboard
+├── stdatalog-usboffload.service # Tells Linux how to run USB auto-backup
+├── service_monitor.py         # The code for the web dashboard
+├── setup_services.sh          # Script that installs everything (run once)
+├── stdatalog-services         # The main control script (use this often!)
+└── README.md                  # This helpful guide
+```
+
+## � Backup & Recovery
+
+Don't worry! When you run the setup, your original files are safely backed up here:
 ```
 backup_changes/systemd_services_backup_YYYYMMDD_HHMMSS/
 ```
+
+If something breaks, you can always go back to how things were before.
+
+## 📝 For Future You/New Person Taking Over
+
+**Key Things to Remember:**
+1. **Web dashboard is your friend** → http://localhost:8080 shows you everything
+2. **The `./stdatalog-services` script** does most of what you need
+3. **BLE and USB services** should always be running (they auto-restart)
+4. **CLI service** you start manually when you want to record data
+5. **Log files** in `/home/kirwinr/logs/` tell you what went wrong
+
+**Common Questions:**
+- **"Nothing is working!"** → Check the web dashboard first, then restart everything
+- **"Data isn't recording!"** → Make sure CLI service is started AND BLE sensors are connected
+- **"USB backup not working!"** → Check if USB is properly mounted and has enough space
+- **"I changed something and broke it!"** → Use the backup files to restore original settings
+
+**This folder makes your system "professional"** - everything runs automatically in the background like a real product, not just manual Python scripts. Pretty cool! 🚀
 
 To restore original functionality:
 ```bash
