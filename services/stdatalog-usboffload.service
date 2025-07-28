@@ -1,0 +1,18 @@
+[Unit]
+Description=STDatalog USB Acquisition Data Offload Service
+After=network.target
+
+[Service]
+Type=simple
+# Update this path to your Python interpreter in your venv!
+ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python /home/kirwinr/Desktop/stdatalog/thread/usb_transfer.py
+WorkingDirectory=/home/kirwinr/Desktop/stdatalog/thread
+User=kirwinr
+Group=kirwinr
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/kirwinr/logs/stdatalog-usboffload.log
+StandardError=append:/home/kirwinr/logs/stdatalog-usboffload.log
+
+[Install]
+WantedBy=multi-user.target

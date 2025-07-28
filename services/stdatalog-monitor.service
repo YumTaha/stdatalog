@@ -7,9 +7,9 @@ Wants=network.target
 Type=simple
 User=kirwinr
 Group=kirwinr
-WorkingDirectory=/home/kirwinr/Documents/stdatalog-pysdk/services
-Environment=PYTHONPATH=/home/kirwinr/Documents/stdatalog-pysdk
-ExecStart=/home/kirwinr/Documents/stdatalog-pysdk/.venv/bin/python service_monitor.py
+WorkingDirectory=/home/kirwinr/Desktop/stdatalog/services
+Environment=PYTHONPATH=/home/kirwinr/Desktop/stdatalog:/home/kirwinr/Desktop/stdatalog/.venv/lib/python3.11/site-packages
+ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python service_monitor.py
 Restart=always
 RestartSec=5
 StandardOutput=append:/home/kirwinr/logs/service-monitor.log

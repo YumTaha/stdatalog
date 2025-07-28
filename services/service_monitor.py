@@ -25,11 +25,72 @@ SERVICES = {
         'name': 'STDatalog BLE Controller',
         'log_file': '/home/kirwinr/logs/stdatalog-ble.log', 
         'auto_restart': True
+    },
+    'stdatalog-usboffload': {
+        'name': 'USB Data Offload',
+        'log_file': '/home/kirwinr/logs/stdatalog-usboffload.log',
+        'auto_restart': True,
+        'compact': True  # Special flag for compact display
     }
 }
 
 # Acquisition folder monitoring
-ACQ_FOLDER = "/home/kirwinr/Documents/stdatalog-pysdk/acquisition_data"
+ACQ_FOLDER = "/home/kirwinr/Desktop/stdatalog/acquisition_data"
+
+def get_recent_logs():
+    """Get recent log entries from both services separately"""
+    service_logs = {}
+    for service_id, config in SERVICES.items():
+        # Skip logs for USB service as per requirements
+        if config.get('compact', False):
+            continue
+            
+        log_file = config['log_file']
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, 'r') as f:
+                    lines = f.readlines()
+                    # Get last 25 lines from each service
+                    recent = lines[-25:] if len(lines) > 25 else lines
+                    service_logs[service_id] = ''.join(recent) if recent else "No recent logs available"
+            except:
+                service_logs[service_id] = "Error reading log file"
+        else:
+            service_logs[service_id] = "Log file not found"
+    return service_logs
+
+def get_usb_status():
+    """Check if any USB stick is mounted and get info"""
+    import getpass
+    base_media = f"/media/{getpass.getuser()}"
+    
+    try:
+        if os.path.isdir(base_media):
+            # Find all mounted USB drives
+            usb_mounts = [os.path.join(base_media, d) for d in os.listdir(base_media)
+                         if os.path.ismount(os.path.join(base_media, d))]
+            
+            if usb_mounts:
+                # Use the first USB found
+                usb_path = usb_mounts[0]
+                # Get disk usage info
+                import shutil
+                total, used, free = shutil.disk_usage(usb_path)
+                free_mb = free // (1024*1024)
+                total_mb = total // (1024*1024)
+                used_percent = int((used / total) * 100)
+                
+                return {
+                    'connected': True,
+                    'free_space_mb': free_mb,
+                    'total_space_mb': total_mb,
+                    'used_percent': used_percent,
+                    'mount_path': usb_path
+                }
+        
+        return {'connected': False}
+    except:
+        return {'connected': False}
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -73,6 +134,45 @@ HTML_TEMPLATE = """
         }
         .service-card.active { border-color: #27ae60; background: #f8fff8; }
         .service-card.inactive { border-color: #e74c3c; background: #fff8f8; }
+        .service-card.compact { 
+            grid-column: 1 / -1; /* Span all columns */
+            padding: 12px 20px; 
+            background: #f8f9fa; 
+            border: 1px solid #ddd;
+            min-height: auto;
+        }
+        .service-card.compact.active { border-color: #17a2b8; background: #f0f9ff; }
+        .service-card.compact.inactive { border-color: #6c757d; background: #f8f9fa; }
+        .compact-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        .compact-left {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+        .compact-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .usb-info { 
+            font-size: 12px; 
+            color: #6c757d; 
+            margin-top: 8px;
+        }
+        .usb-status { 
+            display: inline-block; 
+            padding: 2px 6px; 
+            border-radius: 3px; 
+            font-size: 11px; 
+            font-weight: bold;
+        }
+        .usb-connected { background: #d4edda; color: #155724; }
+        .usb-disconnected { background: #f8d7da; color: #721c24; }
         .service-header { 
             display: flex; 
             align-items: center; 
@@ -152,6 +252,28 @@ HTML_TEMPLATE = """
             white-space: pre-wrap; 
             font-size: 12px;
         }
+        .logs-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        .log-column {
+            flex: 1;
+            background: #2c3e50;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .log-column h4 {
+            margin: 0 0 15px 0;
+            color: #f39c12;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            border-bottom: 2px solid #f39c12;
+            padding: 8px 0;
+            background: #34495e;
+            border-radius: 4px;
+        }
         .refresh-notice { 
             background: #f39c12; 
             color: white; 
@@ -162,11 +284,101 @@ HTML_TEMPLATE = """
         }
     </style>
     <script>
-        function refreshPage() {
-            window.location.reload();
-        }
-        // Auto-refresh every 30 seconds
-        setTimeout(refreshPage, 30000);
+    function updateDashboard() {
+        fetch("/api/status")
+            .then(response => response.json())
+            .then(data => {
+                try {
+                    // Update service status
+                    for (const [service_id, info] of Object.entries(data.services)) {
+                        // Uptime
+                        const uptimeEl = document.getElementById(service_id + "-uptime");
+                        if (uptimeEl) uptimeEl.textContent = info.uptime;
+                        
+                        // Memory
+                        const memoryEl = document.getElementById(service_id + "-memory");
+                        if (memoryEl) memoryEl.textContent = info.memory;
+                        
+                        // Status LED
+                        let led = document.getElementById(service_id + "-led");
+                        if (led) led.className = "led " + (info.status === "active" ? "green" : "red");
+                        
+                        // Status Text
+                        let statusText = document.getElementById(service_id + "-status");
+                        if (statusText) {
+                            statusText.textContent = info.status.toUpperCase() + (info.auto_restart ? " (Auto-restart)" : " (Manual)");
+                            statusText.className = "service-status " + (info.status === "active" ? "status-active" : "status-inactive");
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error updating services:", error);
+                }
+
+                try {
+                    // Update system stats
+                    const acqFoldersEl = document.getElementById("acq_folders");
+                    if (acqFoldersEl) acqFoldersEl.textContent = data.system.acquisition_folders;
+                    
+                    const cutFoldersEl = document.getElementById("cut_folders");
+                    if (cutFoldersEl) cutFoldersEl.textContent = data.system.cut_folders;
+                    
+                    const diskUsageEl = document.getElementById("disk_usage");
+                    if (diskUsageEl) diskUsageEl.textContent = data.system.disk_usage + "%";
+                } catch (error) {
+                    console.error("Error updating system stats:", error);
+                }
+
+                try {
+                    // Update USB status
+                    if (data.system.usb_status) {
+                        const usbStatusEl = document.getElementById("usb-status");
+                        const usbInfoEl = document.getElementById("usb-info");
+                        
+                        if (usbStatusEl && usbInfoEl) {
+                            if (data.system.usb_status.connected) {
+                                usbStatusEl.textContent = "CONNECTED";
+                                usbStatusEl.className = "usb-status usb-connected";
+                                usbInfoEl.textContent = `${data.system.usb_status.free_space_mb} MB free (${data.system.usb_status.used_percent}% used)`;
+                            } else {
+                                usbStatusEl.textContent = "NOT DETECTED";
+                                usbStatusEl.className = "usb-status usb-disconnected";
+                                usbInfoEl.textContent = "Insert USB stick to begin data transfer";
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error updating USB status:", error);
+                }
+
+                try {
+                    // Update logs per service
+                    if (data.system.logs) {
+                        for (const [service_id, log_content] of Object.entries(data.system.logs)) {
+                            const logDiv = document.getElementById(service_id + "-log");
+                            if (logDiv) {
+                                logDiv.textContent = log_content;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error updating logs:", error);
+                }
+
+                try {
+                    // Update timestamp
+                    const timestampEl = document.getElementById("timestamp");
+                    if (timestampEl) timestampEl.textContent = (new Date(data.system.timestamp)).toLocaleString();
+                } catch (error) {
+                    console.error("Error updating timestamp:", error);
+                }
+            })
+            .catch(error => {
+                console.error("Dashboard update failed:", error);
+            });
+    }
+
+    // Update every second
+    setInterval(updateDashboard, 1000);
     </script>
 </head>
 <body>
@@ -174,30 +386,66 @@ HTML_TEMPLATE = """
         <h1>🔧 STDatalog Service Monitor</h1>
         
         <div class="refresh-notice">
-            ⏱️ Page auto-refreshes every 30 seconds | Last updated: {{ timestamp }}
+            ⏱️ Live updates | Last updated: <span id="timestamp">{{ timestamp }}</span>
         </div>
         
         <div class="service-grid">
             {% for service_id, service_info in services.items() %}
+            {% if service_info.config.get('compact', False) %}
+            <!-- Compact USB Service -->
+            <div class="service-card compact {{ 'active' if service_info.status == 'active' else 'inactive' }}">
+                <div class="compact-content">
+                    <div class="compact-left">
+                        <div class="led {{ 'green' if service_info.status == 'active' else 'red' }}" id="{{ service_id }}-led"></div>
+                        <div style="margin-right: 20px;">
+                            <div class="service-name">📀 {{ service_info.config.name }}</div>
+                            <div class="service-status {{ 'status-active' if service_info.status == 'active' else 'status-inactive' }}" id="{{ service_id }}-status">
+                                {{ service_info.status.upper() }}{% if service_info.config.auto_restart %} (Auto-restart){% else %} (Manual){% endif %}
+                            </div>
+                        </div>
+                        <div class="usb-info">
+                            USB: <span class="usb-status usb-disconnected" id="usb-status">NOT DETECTED</span>
+                            <small id="usb-info" style="display: block; margin-top: 2px;">Insert USB stick to begin data transfer</small>
+                        </div>
+                    </div>
+                    <div class="compact-right">
+                        <form method="post" action="/control/{{ service_id }}" style="display: inline;">
+                            <input type="hidden" name="action" value="restart">
+                            <button type="submit" class="btn btn-restart" style="padding: 8px 12px; font-size: 12px;">🔄</button>
+                        </form>
+                        {% if service_info.status == 'active' %}
+                        <form method="post" action="/control/{{ service_id }}" style="display: inline;">
+                            <input type="hidden" name="action" value="stop">
+                            <button type="submit" class="btn btn-stop" style="padding: 8px 12px; font-size: 12px;">⏹️</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="/control/{{ service_id }}" style="display: inline;">
+                            <input type="hidden" name="action" value="start">
+                            <button type="submit" class="btn btn-start" style="padding: 8px 12px; font-size: 12px;">▶️</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Regular Service -->
             <div class="service-card {{ 'active' if service_info.status == 'active' else 'inactive' }}">
                 <div class="service-header">
-                    <div class="led {{ 'green' if service_info.status == 'active' else 'red' }}"></div>
+                    <div class="led {{ 'green' if service_info.status == 'active' else 'red' }}" id="{{ service_id }}-led"></div>
                     <div>
                         <div class="service-name">{{ service_info.config.name }}</div>
-                        <div class="service-status {{ 'status-active' if service_info.status == 'active' else 'status-inactive' }}">
-                            {{ service_info.status.upper() }}
-                            {% if service_info.config.auto_restart %}(Auto-restart){% else %}(Manual){% endif %}
+                        <div class="service-status {{ 'status-active' if service_info.status == 'active' else 'status-inactive' }}" id="{{ service_id }}-status">
+                            {{ service_info.status.upper() }}{% if service_info.config.auto_restart %} (Auto-restart){% else %} (Manual){% endif %}
                         </div>
                     </div>
                 </div>
-                
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value">{{ service_info.uptime }}</div>
+                        <div class="stat-value" id="{{ service_id }}-uptime">{{ service_info.uptime }}</div>
                         <div class="stat-label">Uptime</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">{{ service_info.memory }}</div>
+                        <div class="stat-value" id="{{ service_id }}-memory">{{ service_info.memory }}</div>
                         <div class="stat-label">Memory</div>
                     </div>
                 </div>
@@ -221,28 +469,36 @@ HTML_TEMPLATE = """
                     {% endif %}
                 </div>
             </div>
+            {% endif %}
             {% endfor %}
         </div>
         
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value">{{ acq_folders }}</div>
+                <div class="stat-value" id="acq_folders">{{ acq_folders }}</div>
                 <div class="stat-label">Acquisition Folders</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ cut_folders }}</div>
+                <div class="stat-value" id="cut_folders">{{ cut_folders }}</div>
                 <div class="stat-label">Cut Folders</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ disk_usage }}%</div>
+                <div class="stat-value" id="disk_usage">{{ disk_usage }}%</div>
                 <div class="stat-label">Disk Usage</div>
             </div>
         </div>
         
         {% if recent_logs %}
         <div class="log-section">
-            <h3>📋 Recent Logs (Last 50 lines combined)</h3>
-            <div class="log-content">{{ recent_logs }}</div>
+            <h3>📋 Recent Logs (Last 25 lines per service)</h3>
+            <div class="logs-container">
+                {% for service_id, log_content in recent_logs.items() %}
+                <div class="log-column">
+                    <h4>🔧 {{ services[service_id]['config']['name'] if service_id in services else service_id }} ({{ service_id }})</h4>
+                    <div class="log-content" id="{{ service_id }}-log">{{ log_content }}</div>
+                </div>
+                {% endfor %}
+            </div>
         </div>
         {% endif %}
     </div>
@@ -317,39 +573,35 @@ def get_acquisition_stats():
         folders = [d for d in os.listdir(ACQ_FOLDER) 
                   if os.path.isdir(os.path.join(ACQ_FOLDER, d))]
         
-        total_folders = len(folders)
-        cut_folders = len([f for f in folders if f.startswith('cut_')])
+        # Count cut_* folders
+        cut_folders = [f for f in folders if f.startswith('cut_')]
+        cut_folder_count = len(cut_folders)
         
-        return total_folders, cut_folders
+        # Count all subfolders inside cut_* folders
+        total_acquisition_folders = 0
+        for cut_folder in cut_folders:
+            cut_folder_path = os.path.join(ACQ_FOLDER, cut_folder)
+            try:
+                subfolders = [d for d in os.listdir(cut_folder_path) 
+                             if os.path.isdir(os.path.join(cut_folder_path, d))]
+                total_acquisition_folders += len(subfolders)
+            except:
+                # Skip if we can't read the cut folder
+                continue
+        
+        return total_acquisition_folders, cut_folder_count
     except:
         return 0, 0
 
 def get_disk_usage():
     """Get disk usage percentage for the workspace"""
     try:
-        usage = psutil.disk_usage('/home/kirwinr/Documents/stdatalog-pysdk')
+        usage = psutil.disk_usage('/home/kirwinr/Desktop/stdatalog')
         return int(usage.percent)
     except:
         return 0
 
-def get_recent_logs():
-    """Get recent log entries from both services"""
-    logs = []
-    for service_id, config in SERVICES.items():
-        log_file = config['log_file']
-        if os.path.exists(log_file):
-            try:
-                with open(log_file, 'r') as f:
-                    lines = f.readlines()
-                    # Get last 25 lines from each service
-                    recent = lines[-25:] if len(lines) > 25 else lines
-                    for line in recent:
-                        logs.append(f"[{service_id}] {line.strip()}")
-            except:
-                pass
-    
-    # Return last 50 combined log lines
-    return '\n'.join(logs[-50:]) if logs else "No recent logs available"
+
 
 @app.route("/")
 def dashboard():
@@ -368,6 +620,7 @@ def dashboard():
     acq_folders, cut_folders = get_acquisition_stats()
     disk_usage = get_disk_usage()
     recent_logs = get_recent_logs()
+    usb_status = get_usb_status()
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
@@ -377,6 +630,7 @@ def dashboard():
                                 cut_folders=cut_folders,
                                 disk_usage=disk_usage,
                                 recent_logs=recent_logs,
+                                usb_status=usb_status,
                                 timestamp=timestamp)
 
 @app.route("/control/<service_id>", methods=["POST"])
@@ -389,14 +643,19 @@ def control_service(service_id):
         return "Invalid action", 400
     
     try:
-        subprocess.run(['systemctl', action, service_id], check=True)
+        # Clear the log file before performing the action
+        log_file = SERVICES[service_id]['log_file']
+        if os.path.exists(log_file):
+            with open(log_file, 'w') as f:
+                f.write(f"=== Log cleared - {action} action at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+        
+        subprocess.run(['sudo', 'systemctl', action, service_id], check=True)
         return redirect('/')
     except subprocess.CalledProcessError as e:
         return f"Failed to {action} service: {e}", 500
 
 @app.route("/api/status")
 def api_status():
-    """JSON API endpoint for service status"""
     services = {}
     for service_id, config in SERVICES.items():
         info = get_service_info(service_id)
@@ -409,14 +668,18 @@ def api_status():
         }
     
     acq_folders, cut_folders = get_acquisition_stats()
-    
+    logs = get_recent_logs() 
+    usb_status = get_usb_status()
+
     return jsonify({
         'services': services,
         'system': {
             'acquisition_folders': acq_folders,
             'cut_folders': cut_folders,
             'disk_usage': get_disk_usage(),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'logs': logs,
+            'usb_status': usb_status
         }
     })
 
@@ -425,7 +688,7 @@ if __name__ == "__main__":
     os.makedirs('/home/kirwinr/logs', exist_ok=True)
     
     print("🌐 STDatalog Service Monitor starting...")
-    print("📊 Dashboard available at: http://localhost:8080")
-    print("🔌 API endpoint available at: http://localhost:8080/api/status")
+    print("📊 Dashboard available at: http://10.0.71.110:8080/")
+    print("🔌 API endpoint available at: http://10.0.71.110:8080/api/status")
     
     app.run(host="0.0.0.0", port=8080, debug=False)

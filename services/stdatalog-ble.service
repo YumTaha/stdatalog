@@ -8,9 +8,9 @@ Requires=bluetooth.target
 Type=simple
 User=kirwinr
 Group=kirwinr
-WorkingDirectory=/home/kirwinr/Documents/stdatalog-pysdk/thread
-Environment=PYTHONPATH=/home/kirwinr/Documents/stdatalog-pysdk
-ExecStart=/home/kirwinr/Documents/stdatalog-pysdk/thread/test/bin/python ble.py
+WorkingDirectory=/home/kirwinr/Desktop/stdatalog/thread
+Environment=PYTHONPATH=/home/kirwinr/Desktop/stdatalog:/home/kirwinr/Desktop/stdatalog/.venv/lib/python3.11/site-packages
+ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python ble_service.py
 Restart=on-failure
 RestartSec=10
 StartLimitInterval=60

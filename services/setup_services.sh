@@ -23,17 +23,19 @@ check_sudo() {
 # Install required Python packages
 install_dependencies() {
     echo -e "${BLUE}📦 Installing Python dependencies...${NC}"
-    /home/kirwinr/Documents/stdatalog-pysdk/.venv/bin/pip install flask psutil
+    /home/kirwinr/Desktop/stdatalog/.venv/bin/pip install flask psutil
 }
 
 # Create log directory
 setup_logs() {
     echo -e "${BLUE}📁 Creating log directories...${NC}"
-    mkdir -p /home/kirwinr/logs
-    touch /home/kirwinr/logs/stdatalog-cli.log
-    touch /home/kirwinr/logs/stdatalog-ble.log
-    touch /home/kirwinr/logs/service-monitor.log
-    chmod 664 /home/kirwinr/logs/*.log
+    sudo mkdir -p /home/kirwinr/logs
+    sudo touch /home/kirwinr/logs/stdatalog-cli.log
+    sudo touch /home/kirwinr/logs/stdatalog-ble.log
+    sudo touch /home/kirwinr/logs/service-monitor.log
+    sudo touch /home/kirwinr/logs/stdatalog-usboffload.log
+    sudo chown kirwinr:kirwinr /home/kirwinr/logs/*.log
+    sudo chmod 664 /home/kirwinr/logs/*.log
 }
 
 # Copy service files to systemd
@@ -41,7 +43,7 @@ install_services() {
     echo -e "${BLUE}⚙️ Installing systemd service files...${NC}"
     
     # Copy service files
-    sudo cp /home/kirwinr/Documents/stdatalog-pysdk/services/*.service /etc/systemd/system/
+    sudo cp /home/kirwinr/Desktop/stdatalog/services/*.service /etc/systemd/system/
     
     # Reload systemd
     sudo systemctl daemon-reload
@@ -60,6 +62,9 @@ enable_services() {
     # Enable BLE service (auto-restart)
     sudo systemctl enable stdatalog-ble
     
+    # Enable USB offload service (auto-restart)
+    sudo systemctl enable stdatalog-usboffload
+    
     # Don't enable CLI service (manual start only)
     echo -e "${YELLOW}ℹ️ CLI service will be started manually only${NC}"
     
@@ -71,7 +76,7 @@ show_status() {
     echo -e "\n${BLUE}📊 Service Status:${NC}"
     echo "----------------------------------------"
     
-    services=("stdatalog-monitor" "stdatalog-ble" "stdatalog-cli")
+    services=("stdatalog-monitor" "stdatalog-ble" "stdatalog-cli" "stdatalog-usboffload")
     for service in "${services[@]}"; do
         status=$(systemctl is-active $service 2>/dev/null || echo "inactive")
         if [ "$status" = "active" ]; then
@@ -83,13 +88,13 @@ show_status() {
     
     echo ""
     echo -e "${BLUE}🌐 Dashboard URLs:${NC}"
-    echo "  Local:    http://localhost:8080"
     echo "  Network:  http://$(hostname -I | cut -d' ' -f1):8080"
     echo ""
     echo -e "${BLUE}📋 Useful Commands:${NC}"
     echo "  Start CLI:      sudo systemctl start stdatalog-cli"
     echo "  Stop CLI:       sudo systemctl stop stdatalog-cli"
     echo "  Restart BLE:    sudo systemctl restart stdatalog-ble"
+    echo "  Restart USB:    sudo systemctl restart stdatalog-usboffload"
     echo "  View logs:      tail -f /home/kirwinr/logs/stdatalog-*.log"
     echo "  Service status: systemctl status stdatalog-cli"
 }
