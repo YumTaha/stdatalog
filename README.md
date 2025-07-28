@@ -205,10 +205,6 @@ cd services/
 4. What do the log files say?
 5. Did someone change the sensor MAC addresses or thresholds?
 
-## 🎓 This Was Built By Students
-
-This project started as a student engineering project. The goal was to make industrial data collection **smarter** and **more automated**. Instead of manually starting/stopping data recording, the system uses wireless sensors to intelligently know when the machine is actually doing productive work.
-
 **Pretty cool, right?** You're working with a system that bridges hardware sensors, wireless communication, data processing, and web interfaces - that's a lot of different technologies working together! 🚀
 
 ---
@@ -216,5 +212,6 @@ This project started as a student engineering project. The goal was to make indu
 **Need more details?** Check out the folder-specific README files:
 - 📁 [Services README](services/README.md) - For setup and service management
 - 📁 [Thread README](thread/README.md) - For BLE sensors and USB transfer
+- 📁 [STDATALOG-PYSDK Repository]([thread/README.md](https://github.com/STMicroelectronics/stdatalog-pysdk)) - For STD Communication
 
 Good luck, and may your data collection be ever automatic! 🎯
