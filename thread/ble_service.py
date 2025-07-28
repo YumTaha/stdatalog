@@ -24,7 +24,7 @@ SOCKET_PORT = 8888
 ACQ_FOLDER = "../acquisition_data"
 
 # Feedrate logic
-DOWN_THRESHOLD_IN_MIN = -10  # in/min
+DOWN_THRESHOLD_IN_MIN = -50  # in/min
 # Speed sensor logic
 START_THRESHOLD_SP = 0.5  # rad/s
 
@@ -230,8 +230,6 @@ async def main():
     try:
         tasks = [
             asyncio.create_task(ble_and_ipc_task(controller)),
-            # Uncomment and implement if you want folder cleanup:
-            # asyncio.create_task(cut_folder_manager()),
         ]
         await asyncio.gather(*tasks)
     except KeyboardInterrupt:
