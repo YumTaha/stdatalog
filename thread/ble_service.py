@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import logging
+import colorlog
 import argparse
 from bleak import BleakClient, BleakScanner
 
@@ -23,7 +24,7 @@ SOCKET_PORT = 8888
 ACQ_FOLDER = "../acquisition_data"
 
 # Feedrate logic
-DOWN_THRESHOLD_IN_MIN = -0.5  # in/min
+DOWN_THRESHOLD_IN_MIN = -10  # in/min
 # Speed sensor logic
 START_THRESHOLD_SP = 0.5  # rad/s
 
@@ -256,12 +257,36 @@ if __name__ == "__main__":
     parser.add_argument('--log', default="INFO", help="Set log level: DEBUG, INFO, WARNING, ERROR, CRITICAL")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=getattr(logging, args.log.upper(), logging.INFO),
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler(sys.stdout)]
+    root_level = logging.INFO if args.log.upper() == "DEBUG" else getattr(logging, args.log.upper(), logging.INFO)
+
+    # Use colorlog for colored console logs
+    color_formatter = colorlog.ColoredFormatter(
+        "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+        datefmt=None,
+        reset=True,
+        log_colors={
+            'DEBUG':    'cyan',
+            'INFO':     'white',
+            'WARNING':  'yellow',
+            'ERROR':    'red',
+            'CRITICAL': 'bold_red',
+        }
     )
+    handler = colorlog.StreamHandler()
+    handler.setFormatter(color_formatter)
+
+    # Replace handlers for the root logger
+    logging.root.handlers = []
+    logging.root.addHandler(handler)
+    logging.root.setLevel(root_level)
+
     logger.setLevel(getattr(logging, args.log.upper(), logging.INFO))
+
+    # Suppress Bleak/dbus logs at DEBUG level
+    if args.log.upper() == "DEBUG":
+        logging.getLogger("bleak").setLevel(logging.WARNING)
+        logging.getLogger("dbus_fast").setLevel(logging.WARNING)
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
