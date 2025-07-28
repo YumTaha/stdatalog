@@ -114,15 +114,33 @@ async def ble_and_ipc_task(sock):
         logger.error("Failed to connect to CLI logger after maximum retries. Exiting.")
         return
 
-    logger.info(f"Connecting to BLE device with MAC: {DEVICE_MAC_ADDRESS} ...")
-    sent_state = None  # None, "started", "stopped"
+    sent_state = None
+    reconnect_timeout = 15  # seconds
 
-    try:
-        async with BleakClient(DEVICE_MAC_ADDRESS) as client:
+    client = BleakClient(DEVICE_MAC_ADDRESS)
+
+    while True:
+        try:
+            logger.info(f"Connecting to BLE device with MAC: {DEVICE_MAC_ADDRESS} ...")
+            
+            # Force rediscovery if device not found
+            found = False
+            devices = await BleakScanner.discover(timeout=5.0)
+            for d in devices:
+                if d.address.upper() == DEVICE_MAC_ADDRESS.upper():
+                    found = True
+                    break
+
+            if not found:
+                logger.warning(f"Device {DEVICE_MAC_ADDRESS} not found during scan. Will retry.")
+                await asyncio.sleep(5)
+                continue
+
+            # Now try to connect
+            await asyncio.wait_for(client.connect(), timeout=reconnect_timeout)
+
             if not client.is_connected:
-                logger.error("Could not connect to BLE device.")
-                sock.close()
-                return
+                raise RuntimeError("Failed to connect to BLE device.")
 
             logger.info("Connected to BLE device. Subscribing to notifications...")
 
@@ -142,22 +160,40 @@ async def ble_and_ipc_task(sock):
                 except Exception as e:
                     logger.error(f"Malformed data: {data} ({e})")
 
+            await client.start_notify(CHAR_UUID, notification_handler)
+            logger.info("Listening for updates.")
+
+            while True:
+                await asyncio.sleep(1)
+                if not client.is_connected:
+                    logger.warning("BLE device disconnected unexpectedly.")
+                    break  # break inner loop to reconnect
+
+        except asyncio.TimeoutError:
+            logger.error(f"Failed to reconnect within {reconnect_timeout} seconds.")
+            if sent_state != "stopped":
+                logger.info("Sending 'stop' due to connection timeout.")
+                try:
+                    sock.sendall(b'stop\n')
+                except Exception as e:
+                    logger.warning(f"Failed to send 'stop': {e}")
+            continue # Retrying to connect FOREVER
+        except Exception as e:
+            logger.error(f"BLE connection error: {e}")
+            await asyncio.sleep(5)  # backoff before retrying
+            continue  # keep retrying
+        finally:
             try:
-                await client.start_notify(CHAR_UUID, notification_handler)
-                logger.info("Listening for updates. Service will run continuously.")
-                while True:
-                    await asyncio.sleep(1)
+                if client.is_connected:
+                    await client.stop_notify(CHAR_UUID)
+                    logger.info("Stopped BLE notifications.")
+                    await client.disconnect()
+                    logger.info("BLE client disconnected.")
             except Exception as e:
-                logger.error(f"Error during notification handling: {e}")
-            finally:
-                await client.stop_notify(CHAR_UUID)
-                logger.info("Stopped BLE notifications.")
-                
-    except Exception as e:
-        logger.error(f"BLE connection error: {e}")
-    finally:
-        sock.close()
-        logger.info("Socket closed.")
+                logger.warning(f"Cleanup error: {e}")
+
+    sock.close()
+    logger.info("Socket closed.")
 
 async def main():
     """Main service function"""
