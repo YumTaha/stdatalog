@@ -25,30 +25,73 @@ stdatalog/
 ├── 📁 thread/            ← Core scripts (BLE sensors, USB transfer)
 ├── 📁 stdatalog_core/    ← Main STDatalog software 
 ├── 📁 stdatalog_gui/     ← Graphical interface
+├── 📁 stdatalog_pnpl/    ← PnP Like configuration library
+├── 📁 stdatalog_dtk/     ← Data Toolkit for processing
 ├── 📁 stdatalog_examples/ ← Example code and tutorials
 ├── 📁 acquisition_data/  ← Where your recorded data gets saved
 ├── 📁 linux_setup/      ← USB permission setup for Linux
+├── 📁 .venv/            ← Python virtual environment (created by global_setup.sh)
+├── 📄 global_setup.sh   ← One-command installation script
 └── 📄 README.md          ← This file
 ```
 
 ## 🚀 Quick Start Guide
 
-### For First-Time Setup:
+### One-Command Installation (New Users):
 
-1. **Set up the automatic services** (makes everything run in the background):
+**For STWINBX1 on Linux - Complete Setup:**
+```bash
+# Clone this repository first:
+git clone https://github.com/YumTaha/stdatalog.git
+cd stdatalog
+
+# Run the global setup (installs everything automatically):
+./global_setup.sh
+```
+
+**What the global setup does:**
+- ✅ Checks system requirements (Python 3.10+)
+- ✅ Installs system dependencies (audio, GUI, USB drivers)
+- ✅ Creates Python virtual environment
+- ✅ Installs all STDATALOG-PYSDK packages
+- ✅ Configures USB drivers for STWINBX1
+- ✅ Tests the installation
+
+**After global setup:**
+```bash
+# Reboot is recommended for USB drivers to work properly
+sudo reboot
+```
+
+**Global setup options:**
+```bash
+./global_setup.sh --help          # Show all options
+./global_setup.sh --no-gui        # Install without GUI (headless systems)
+./global_setup.sh --skip-usb      # Skip USB driver setup
+./global_setup.sh --proxy http://proxy:8080  # Use with corporate proxy
+```
+
+### After Installation - Setup Services:
+
+1. **Activate the virtual environment** (required):
+   ```bash
+   source .venv/bin/activate
+   ```
+
+2. **Set up the automatic services** (makes everything run in the background):
    ```bash
    cd services/
    ./setup_services.sh
    ```
 
-2. **Open the web dashboard** to see what's happening:
+3. **Open the web dashboard** to see what's happening:
    ```
    http://localhost:8080
    ```
 
-3. **Connect your STDatalog hardware** (the actual sensor board)
+4. **Connect your STDatalog hardware** (the actual sensor board)
 
-4. **Start data collection** when ready:
+5. **Start data collection** when ready:
    ```bash
    cd services/
    ./stdatalog-services start cli
@@ -56,10 +99,16 @@ stdatalog/
 
 ### For Daily Use:
 
+**Important:** Always activate the virtual environment first:
+```bash
+source .venv/bin/activate
+```
+
+Then use these commands:
 - **Web Dashboard**: http://localhost:8080 (your control center)
-- **Start recording**: `./stdatalog-services start cli`
-- **Stop recording**: `./stdatalog-services stop cli`  
-- **Check what's happening**: `./stdatalog-services status`
+- **Start recording**: `cd services && ./stdatalog-services start cli`
+- **Stop recording**: `cd services && ./stdatalog-services stop cli`  
+- **Check what's happening**: `cd services && ./stdatalog-services status`
 - **Plug in USB**: Data automatically copies over
 
 ## 📋 How The System Works
@@ -86,6 +135,11 @@ stdatalog/
 - **Smart Disconnect Handling**: If the speed sensor disconnects, the system waits 1 minute before stopping data collection (in case it's just a temporary connection issue)
 - **Disconnect Logging**: All speed sensor disconnections are logged with timestamps to `acquisition_data/speed_sensor_disconnections.txt` for troubleshooting
 - **Auto-Reconnection**: Both BLE sensors automatically try to reconnect forever if disconnected
+- **Automated Installation**: The `global_setup.sh` script automatically installs all dependencies including:
+  - System libraries (audio, USB, GUI support)
+  - Python packages (numpy, matplotlib, pandas, bleak, colorlog)
+  - STDATALOG-PYSDK components (core, GUI, examples, PnPL, DTK)
+  - USB drivers and permissions for STWINBX1
 
 ## 🔧 Main Components
 
@@ -137,6 +191,9 @@ acquisition_data/
 
 ### Daily Operation:
 ```bash
+# FIRST: Always activate the virtual environment
+source .venv/bin/activate
+
 # See what's running
 cd services/
 ./stdatalog-services status
@@ -170,9 +227,15 @@ cd services/
 ## 🚨 Troubleshooting Quick Fixes
 
 ### "Nothing is working!"
-1. Check web dashboard: http://localhost:8080
-2. Restart everything: `./stdatalog-services restart all`
-3. Check logs: `./stdatalog-services logs cli`
+1. **Check virtual environment**: `source .venv/bin/activate`
+2. Check web dashboard: http://localhost:8080
+3. Restart everything: `cd services && ./stdatalog-services restart all`
+4. Check logs: `./stdatalog-services logs cli`
+
+### "Command not found" or "Module not found"
+1. **Make sure virtual environment is active**: `source .venv/bin/activate`
+2. If still broken, reinstall: `./global_setup.sh`
+3. Check Python version: `python --version` (should be 3.10+)
 
 ### "BLE sensors not connecting"
 1. Make sure sensors are powered on and nearby
