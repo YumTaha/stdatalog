@@ -6,6 +6,7 @@ import shutil
 import sys
 import logging
 import colorlog
+import subprocess
 import argparse
 from datetime import datetime
 from bleak import BleakClient, BleakScanner
@@ -31,6 +32,50 @@ START_THRESHOLD_SP = 0.5  # rad/s
 
 def parse_float32_le(b):
     return struct.unpack('<f', b)[0]
+
+def check_bluetooth_adapter():
+    """Check if hci1 Bluetooth adapter is ready and functional"""
+    try:
+        # Check if adapter is UP and RUNNING
+        result = subprocess.run(["hciconfig", "hci1"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if "UP RUNNING" not in result.stdout.decode():
+            return False
+            
+        # Additional check: try to do a quick scan to verify adapter is functional
+        try:
+            scan_result = subprocess.run(["timeout", "2", "hcitool", "-i", "hci1", "scan"], 
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
+            # If scan command runs without error, adapter is likely functional
+            return True
+        except subprocess.TimeoutError:
+            # Timeout is acceptable, means scan was working but just took time
+            return True
+        except Exception:
+            # If hcitool fails, adapter might not be fully ready
+            logger.debug("hcitool scan failed, adapter may not be fully ready")
+            return False
+            
+    except Exception as e:
+        logger.warning(f"Error checking Bluetooth adapter: {e}")
+        return False
+
+async def wait_for_adapter_ready():
+    """Wait for Bluetooth adapter to be fully ready with progressive backoff"""
+    max_attempts = 6
+    base_delay = 2
+    
+    for attempt in range(max_attempts):
+        if check_bluetooth_adapter():
+            if attempt > 0:
+                logger.info(f"Bluetooth adapter hci1 is ready after {attempt + 1} attempts")
+            return True
+        
+        delay = base_delay * (2 ** attempt)  # Progressive backoff: 2, 4, 8, 16, 32, 64 seconds
+        logger.warning(f"Bluetooth adapter hci1 not ready. Waiting {delay} seconds... (attempt {attempt + 1}/{max_attempts})")
+        await asyncio.sleep(delay)
+    
+    logger.error("Bluetooth adapter hci1 failed to become ready after maximum attempts")
+    return False
 
 class DataCollectionController:
     def __init__(self, sock):
@@ -118,11 +163,15 @@ class DataCollectionController:
         finally:
             self.speed_stop_timer_task = None
 
-
 async def ble_speed_task(controller):
     client = BleakClient(DEVICE_MAC_ADDRESS_SP)
     controller.speed_client = client
     reconnect_timeout = 15
+
+    # Wait for adapter to be ready at startup
+    if not await wait_for_adapter_ready():
+        logger.error("Speed BLE task aborting - adapter never became ready")
+        return
 
     while True:
         try:
@@ -130,7 +179,7 @@ async def ble_speed_task(controller):
 
             # Scan to rediscover
             found = False
-            devices = await BleakScanner.discover(timeout=5.0)
+            devices = await BleakScanner.discover(timeout=5.0, adapter="hci1")
             for d in devices:
                 if d.address.upper() == DEVICE_MAC_ADDRESS_SP.upper():
                     found = True
@@ -202,12 +251,22 @@ async def ble_speed_task(controller):
             # Set speed as inactive since we're disconnected
             controller.speed_active = False
             
-            await asyncio.sleep(5)  # backoff
+            # Quick adapter check before retry
+            if not check_bluetooth_adapter():
+                logger.warning("Bluetooth adapter issue detected. Waiting longer before retry...")
+                await asyncio.sleep(10)
+            else:
+                await asyncio.sleep(5)  # Normal backoff
 
 async def ble_feedrate_task(controller, ready_event):
     client = BleakClient(DEVICE_MAC_ADDRESS_FR)
     controller.feedrate_client = client
     reconnect_timeout = 15
+
+    # Wait for adapter to be ready at startup
+    if not await wait_for_adapter_ready():
+        logger.error("Feedrate BLE task aborting - adapter never became ready")
+        return
 
     while True:
         try:
@@ -215,7 +274,7 @@ async def ble_feedrate_task(controller, ready_event):
 
             # Scan to rediscover
             found = False
-            devices = await BleakScanner.discover(timeout=5.0)
+            devices = await BleakScanner.discover(timeout=5.0, adapter="hci1")
             for d in devices:
                 if d.address.upper() == DEVICE_MAC_ADDRESS_FR.upper():
                     found = True
@@ -258,7 +317,13 @@ async def ble_feedrate_task(controller, ready_event):
                     await client.disconnect()
             except Exception as e:
                 logger.warning(f"Feedrate BLE cleanup error: {e}")
-            await asyncio.sleep(5)  # backoff
+            
+            # Quick adapter check before retry
+            if not check_bluetooth_adapter():
+                logger.warning("Bluetooth adapter issue detected. Waiting longer before retry...")
+                await asyncio.sleep(10)
+            else:
+                await asyncio.sleep(5)  # Normal backoff
 
 async def ble_and_ipc_task(controller):
     logger.info(f"Connecting to CLI logger at localhost:{SOCKET_PORT}...")
