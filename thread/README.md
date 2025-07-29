@@ -40,6 +40,9 @@ This is the **most important** script. It connects to **two BLE sensors**:
 ### BLE Connection States
 - **"Connected to [Sensor] BLE"** = Good! Sensor is working
 - **"[Sensor] BLE disconnected"** = Sensor lost connection, will try to reconnect
+- **"Starting 1-minute timer before sending stop command"** = Speed sensor disconnected, waiting to see if it reconnects
+- **"Speed sensor reconnected - cancelled disconnect timer"** = Speed sensor came back online during the 1-minute grace period
+- **"1 minute passed since speed disconnect - sending 'stop' command"** = Speed sensor was offline too long, stopping data collection
 - **"Criteria met: Sending 'start'"** = Both sensors active, telling system to record data
 - **"Criteria NOT met: Sending 'stop'"** = Sensors not meeting cutting criteria
 
@@ -52,9 +55,14 @@ This is the **most important** script. It connects to **two BLE sensors**:
 
 ### In `ble_service.py`:
 ```python
-DOWN_THRESHOLD_IN_MIN = -50    # Feedrate must be less than -50 in/min (moving down)
+DOWN_THRESHOLD_IN_MIN = -15    # Feedrate must be less than -15 in/min (moving down)
 START_THRESHOLD_SP = 0.5       # Speed must be at least 0.5 rad/s (spinning)
 SOCKET_PORT = 8888             # How it talks to the main system
+
+# Advanced Features:
+# - Speed sensor disconnect grace period: 60 seconds
+# - Disconnect logging: acquisition_data/speed_sensor_disconnections.txt
+# - Auto-reconnection: Both sensors try to reconnect forever
 ```
 
 ### In `usb_transfer.py`:
@@ -98,13 +106,35 @@ python3 ble_service.py --log DEBUG
 - Make sure there's enough **free space** on the USB drive
 - Check the console output for error messages
 
+### Speed sensor frequent disconnections
+- **Check the disconnect log**: `cat ../acquisition_data/speed_sensor_disconnections.txt`
+- Look for patterns in disconnect times
+- Verify sensor battery/power and BLE range
+- **System waits 1 minute** before stopping recording, so brief disconnects won't interrupt data collection
+
+## 🆕 Recent Features Added
+
+### Smart Speed Sensor Disconnect Handling
+- **1-Minute Grace Period**: When speed sensor disconnects, system waits 60 seconds before sending stop command
+- **Automatic Logging**: All disconnections logged with timestamps to `acquisition_data/speed_sensor_disconnections.txt`
+- **Smart Recovery**: If sensor reconnects during the 1-minute window, stop command is cancelled
+- **Maintenance Aid**: Disconnect log helps identify sensor reliability issues
+
+**Example disconnect log:**
+```
+2025-07-29 09:33:16 - Speed sensor disconnected
+2025-07-29 09:33:56 - Speed sensor disconnected
+2025-07-29 09:35:34 - Speed sensor disconnected
+```
+
 ## 📝 For Future You/New Person
 
 1. **Most important file**: `ble_service.py` - this does the main work
-2. **The thresholds** (like -50 in/min) might need adjustment for different machines
+2. **The thresholds** (like -15 in/min) might need adjustment for different machines
 3. **MAC addresses** will be different if you change sensors
 4. **Socket port 8888** must match what the main STDatalog system expects
 5. The **acquisition_data folder** path must match between all scripts
+6. **Disconnect logging** helps with sensor maintenance and troubleshooting
 
 **Questions to ask when debugging:**
 - Are both sensors connected and sending data?
