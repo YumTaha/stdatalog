@@ -1,7 +1,7 @@
 import asyncio
 from bleak import BleakClient, BleakScanner
 
-DEVICE_MAC_ADDRESS = "F9:51:AC:0F:75:9E"  # Replace with your BLE device's MAC address
+DEVICE_MAC_ADDRESS = "DE:6D:5D:2A:BD:58"  # Replace with your BLE device's MAC address
 
 async def check_ble_adapter():
     # List all available Bluetooth adapters
