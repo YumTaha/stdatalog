@@ -82,6 +82,11 @@ stdatalog/
 - **Blade Reset** = Speed sensor active BUT feedrate moving up → ❌ Don't record  
 - **Machine Idle** = No speed sensor activity → ❌ Don't record
 
+### Advanced Features:
+- **Smart Disconnect Handling**: If the speed sensor disconnects, the system waits 1 minute before stopping data collection (in case it's just a temporary connection issue)
+- **Disconnect Logging**: All speed sensor disconnections are logged with timestamps to `acquisition_data/speed_sensor_disconnections.txt` for troubleshooting
+- **Auto-Reconnection**: Both BLE sensors automatically try to reconnect forever if disconnected
+
 ## 🔧 Main Components
 
 ### 🗂️ For Detailed Information:
@@ -116,13 +121,17 @@ Open http://localhost:8080 to see:
 Your recorded data gets saved like this:
 ```
 acquisition_data/
-├── cut_001/          ← First cutting session
+├── cut_001/                    ← First cutting session
 │   ├── (sensor data files)
-├── cut_002/          ← Second cutting session  
+├── cut_002/                    ← Second cutting session  
 │   ├── (sensor data files)
-└── cut_003/          ← And so on...
-    ├── (sensor data files)
+├── cut_003/                    ← And so on...
+│   ├── (sensor data files)
+└── speed_sensor_disconnections.txt ← Speed sensor disconnect log (timestamps)
 ```
+
+### Log Files:
+- **`speed_sensor_disconnections.txt`**: Tracks when the speed sensor loses connection for maintenance/troubleshooting
 
 ## 🛠️ Common Tasks
 
@@ -169,6 +178,14 @@ cd services/
 1. Make sure sensors are powered on and nearby
 2. Check the MAC addresses in `thread/ble_service.py`
 3. Restart BLE service: `./stdatalog-services restart ble`
+4. **Check disconnect log**: Look at `acquisition_data/speed_sensor_disconnections.txt` to see if there's a pattern of sensor issues
+
+### "Speed sensor keeps disconnecting"
+1. **Check the disconnect log**: `cat acquisition_data/speed_sensor_disconnections.txt`
+2. Look for patterns (same time every day? after long runs?)
+3. Check sensor battery/power supply
+4. Verify sensor is within BLE range (typically 10-30 feet)
+5. **System is designed to handle brief disconnects** - it waits 1 minute before stopping recording
 
 ### "Data not recording"
 1. Make sure CLI service is started: `./stdatalog-services start cli`

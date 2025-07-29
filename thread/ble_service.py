@@ -6,7 +6,9 @@ import shutil
 import sys
 import logging
 import colorlog
+import subprocess
 import argparse
+from datetime import datetime
 from bleak import BleakClient, BleakScanner
 
 logger = logging.getLogger(__name__)
@@ -24,12 +26,56 @@ SOCKET_PORT = 8888
 ACQ_FOLDER = "../acquisition_data"
 
 # Feedrate logic
-DOWN_THRESHOLD_IN_MIN = -50  # in/min
+DOWN_THRESHOLD_IN_MIN = -15  # in/min
 # Speed sensor logic
 START_THRESHOLD_SP = 0.5  # rad/s
 
 def parse_float32_le(b):
     return struct.unpack('<f', b)[0]
+
+def check_bluetooth_adapter():
+    """Check if hci0 Bluetooth adapter is ready and functional"""
+    try:
+        # Check if adapter is UP and RUNNING
+        result = subprocess.run(["hciconfig", "hci0"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if "UP RUNNING" not in result.stdout.decode():
+            return False
+            
+        # Additional check: try to do a quick scan to verify adapter is functional
+        try:
+            scan_result = subprocess.run(["timeout", "2", "hcitool", "-i", "hci0", "scan"], 
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
+            # If scan command runs without error, adapter is likely functional
+            return True
+        except subprocess.TimeoutError:
+            # Timeout is acceptable, means scan was working but just took time
+            return True
+        except Exception:
+            # If hcitool fails, adapter might not be fully ready
+            logger.debug("hcitool scan failed, adapter may not be fully ready")
+            return False
+            
+    except Exception as e:
+        logger.warning(f"Error checking Bluetooth adapter: {e}")
+        return False
+
+async def wait_for_adapter_ready():
+    """Wait for Bluetooth adapter to be fully ready with progressive backoff"""
+    max_attempts = 6
+    base_delay = 2
+    
+    for attempt in range(max_attempts):
+        if check_bluetooth_adapter():
+            if attempt > 0:
+                logger.info(f"Bluetooth adapter hci0 is ready after {attempt + 1} attempts")
+            return True
+        
+        delay = base_delay * (2 ** attempt)  # Progressive backoff: 2, 4, 8, 16, 32, 64 seconds
+        logger.warning(f"Bluetooth adapter hci0 not ready. Waiting {delay} seconds... (attempt {attempt + 1}/{max_attempts})")
+        await asyncio.sleep(delay)
+    
+    logger.error("Bluetooth adapter hci0 failed to become ready after maximum attempts")
+    return False
 
 class DataCollectionController:
     def __init__(self, sock):
@@ -42,6 +88,9 @@ class DataCollectionController:
         # Store client references
         self.feedrate_client = None
         self.speed_client = None
+        # Speed sensor disconnect tracking
+        self.speed_disconnect_time = None
+        self.speed_stop_timer_task = None
 
     async def update_data_collection_state(self):
         async with self.lock:
@@ -71,11 +120,58 @@ class DataCollectionController:
                 logger.info(f"Machine State: {new_machine_state}")
                 self.current_machine_state = new_machine_state
 
+    def log_speed_disconnect(self):
+        """Log speed sensor disconnection time to a file in acquisition_data folder."""
+        try:
+            # Ensure acquisition_data folder exists
+            acq_folder = os.path.abspath(ACQ_FOLDER)
+            os.makedirs(acq_folder, exist_ok=True)
+            
+            # Create log file path
+            log_file = os.path.join(acq_folder, "speed_sensor_disconnections.txt")
+            
+            # Log the disconnection time
+            disconnect_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(log_file, "a") as f:
+                f.write(f"{disconnect_time} - Speed sensor disconnected\n")
+            
+            logger.info(f"Logged speed sensor disconnection at {disconnect_time}")
+        except Exception as e:
+            logger.error(f"Failed to log speed sensor disconnection: {e}")
+
+    async def handle_speed_disconnect_delayed_stop(self):
+        """Handle delayed stop command after speed sensor disconnect (1 minute delay)."""
+        try:
+            logger.info("Starting 1-minute timer before sending stop command due to speed disconnect...")
+            await asyncio.sleep(60)  # Wait 1 minute
+            
+            # Check if speed sensor is still disconnected
+            if self.speed_disconnect_time is not None:
+                logger.info("1 minute passed since speed disconnect - sending 'stop' command")
+                if self.sent_state != "stopped":
+                    try:
+                        self.sock.sendall(b'stop\n')
+                        self.sent_state = 'stopped'
+                    except Exception as e:
+                        logger.warning(f"Failed to send delayed 'stop': {e}")
+            else:
+                logger.info("Speed sensor reconnected during delay - not sending stop command")
+        except asyncio.CancelledError:
+            logger.info("Speed disconnect timer cancelled - sensor reconnected")
+        except Exception as e:
+            logger.error(f"Error in delayed stop handler: {e}")
+        finally:
+            self.speed_stop_timer_task = None
 
 async def ble_speed_task(controller):
     client = BleakClient(DEVICE_MAC_ADDRESS_SP)
     controller.speed_client = client
     reconnect_timeout = 15
+
+    # Wait for adapter to be ready at startup
+    if not await wait_for_adapter_ready():
+        logger.error("Speed BLE task aborting - adapter never became ready")
+        return
 
     while True:
         try:
@@ -83,7 +179,7 @@ async def ble_speed_task(controller):
 
             # Scan to rediscover
             found = False
-            devices = await BleakScanner.discover(timeout=5.0)
+            devices = await BleakScanner.discover(timeout=5.0, adapter="hci0")
             for d in devices:
                 if d.address.upper() == DEVICE_MAC_ADDRESS_SP.upper():
                     found = True
@@ -104,21 +200,41 @@ async def ble_speed_task(controller):
                 value = parse_float32_le(data)
                 logger.debug(f"Speed: {value:.3f} rad/s")
                 controller.speed_active = value >= START_THRESHOLD_SP
+                
+                # Cancel any pending disconnect timer if speed sensor is working
+                if controller.speed_stop_timer_task is not None:
+                    controller.speed_stop_timer_task.cancel()
+                    controller.speed_stop_timer_task = None
+                    logger.info("Speed sensor reconnected - cancelled disconnect timer")
+                
+                # Clear disconnect time since sensor is working
+                controller.speed_disconnect_time = None
+                
                 asyncio.create_task(controller.update_data_collection_state())
 
             await client.start_notify(VELOCITY_CHAR_UUID_SP, notification_handler)
             logger.info("Listening for speed updates.")
+            
+            # Clear disconnect tracking since we're connected
+            controller.speed_disconnect_time = None
+            if controller.speed_stop_timer_task is not None:
+                controller.speed_stop_timer_task.cancel()
+                controller.speed_stop_timer_task = None
+            
             while client.is_connected:
                 await asyncio.sleep(1)
 
             logger.warning("Speed BLE disconnected.")
-            if controller.sent_state != "stopped":
-                logger.info("Sending 'stop' due to Speed disconnect.")
-                try:
-                    controller.sock.sendall(b'stop\n')
-                    controller.sent_state = 'stopped'
-                except Exception as e:
-                    logger.warning(f"Failed to send 'stop': {e}")
+            
+            # Log the disconnection and start delayed stop timer
+            controller.speed_disconnect_time = datetime.now()
+            controller.log_speed_disconnect()
+            
+            # Start the delayed stop timer (only if not already running)
+            if controller.speed_stop_timer_task is None:
+                controller.speed_stop_timer_task = asyncio.create_task(
+                    controller.handle_speed_disconnect_delayed_stop()
+                )
 
         except asyncio.TimeoutError:
             logger.error("Speed connection timed out.")
@@ -131,12 +247,26 @@ async def ble_speed_task(controller):
                     await client.disconnect()
             except Exception as e:
                 logger.warning(f"Speed BLE cleanup error: {e}")
-            await asyncio.sleep(5)  # backoff
+            
+            # Set speed as inactive since we're disconnected
+            controller.speed_active = False
+            
+            # Quick adapter check before retry
+            if not check_bluetooth_adapter():
+                logger.warning("Bluetooth adapter issue detected. Waiting longer before retry...")
+                await asyncio.sleep(10)
+            else:
+                await asyncio.sleep(5)  # Normal backoff
 
 async def ble_feedrate_task(controller, ready_event):
     client = BleakClient(DEVICE_MAC_ADDRESS_FR)
     controller.feedrate_client = client
     reconnect_timeout = 15
+
+    # Wait for adapter to be ready at startup
+    if not await wait_for_adapter_ready():
+        logger.error("Feedrate BLE task aborting - adapter never became ready")
+        return
 
     while True:
         try:
@@ -144,7 +274,7 @@ async def ble_feedrate_task(controller, ready_event):
 
             # Scan to rediscover
             found = False
-            devices = await BleakScanner.discover(timeout=5.0)
+            devices = await BleakScanner.discover(timeout=5.0, adapter="hci0")
             for d in devices:
                 if d.address.upper() == DEVICE_MAC_ADDRESS_FR.upper():
                     found = True
@@ -187,7 +317,13 @@ async def ble_feedrate_task(controller, ready_event):
                     await client.disconnect()
             except Exception as e:
                 logger.warning(f"Feedrate BLE cleanup error: {e}")
-            await asyncio.sleep(5)  # backoff
+            
+            # Quick adapter check before retry
+            if not check_bluetooth_adapter():
+                logger.warning("Bluetooth adapter issue detected. Waiting longer before retry...")
+                await asyncio.sleep(10)
+            else:
+                await asyncio.sleep(5)  # Normal backoff
 
 async def ble_and_ipc_task(controller):
     logger.info(f"Connecting to CLI logger at localhost:{SOCKET_PORT}...")
@@ -238,6 +374,12 @@ async def main():
         logger.error(f"Unexpected error: {e}")
     finally:
         try:
+            # Cancel any pending speed disconnect timer
+            if controller.speed_stop_timer_task is not None:
+                controller.speed_stop_timer_task.cancel()
+                controller.speed_stop_timer_task = None
+                logger.info("Cancelled speed disconnect timer during shutdown")
+            
             if controller.feedrate_client and controller.feedrate_client.is_connected:
                 await controller.feedrate_client.disconnect()
                 logger.info("Disconnected Feedrate BLE device.")

@@ -9,6 +9,7 @@ import subprocess
 import os
 import json
 import time
+import re
 from datetime import datetime
 import psutil
 
@@ -37,8 +38,58 @@ SERVICES = {
 # Acquisition folder monitoring
 ACQ_FOLDER = "/home/kirwinr/Desktop/stdatalog/acquisition_data"
 
+def ansi_to_html(text):
+    """Convert ANSI color codes to HTML with colors matching colorlog setup"""
+    # ANSI color codes mapping to HTML colors
+    ansi_colors = {
+        # Standard colors
+        '\033[30m': '<span style="color: #000000;">',  # black
+        '\033[31m': '<span style="color: #ff0000;">',  # red
+        '\033[32m': '<span style="color: #00ff00;">',  # green
+        '\033[33m': '<span style="color: #ffff00;">',  # yellow
+        '\033[34m': '<span style="color: #0000ff;">',  # blue
+        '\033[35m': '<span style="color: #ff00ff;">',  # magenta
+        '\033[36m': '<span style="color: #00ffff;">',  # cyan
+        '\033[37m': '<span style="color: #ffffff;">',  # white
+        
+        # Bright colors
+        '\033[90m': '<span style="color: #808080;">',  # bright black (gray)
+        '\033[91m': '<span style="color: #ff6666;">',  # bright red
+        '\033[92m': '<span style="color: #66ff66;">',  # bright green
+        '\033[93m': '<span style="color: #ffff66;">',  # bright yellow
+        '\033[94m': '<span style="color: #6666ff;">',  # bright blue
+        '\033[95m': '<span style="color: #ff66ff;">',  # bright magenta
+        '\033[96m': '<span style="color: #66ffff;">',  # bright cyan
+        '\033[97m': '<span style="color: #ffffff;">',  # bright white
+        
+        # Bold (colorlog uses this)
+        '\033[1m': '<span style="font-weight: bold;">',
+        '\033[1;31m': '<span style="color: #ff0000; font-weight: bold;">',  # bold red
+        
+        # Reset
+        '\033[0m': '</span>',
+        '\033[39m': '</span>',  # default foreground
+        '\033[49m': '</span>',  # default background
+    }
+    
+    # Convert ANSI codes to HTML
+    html_text = text
+    for ansi_code, html_tag in ansi_colors.items():
+        html_text = html_text.replace(ansi_code, html_tag)
+    
+    # Handle any remaining ANSI codes with a regex (remove unknown codes)
+    html_text = re.sub(r'\033\[[0-9;]*m', '', html_text)
+    
+    # Ensure proper span closing for any unclosed tags
+    open_spans = html_text.count('<span')
+    close_spans = html_text.count('</span>')
+    if open_spans > close_spans:
+        html_text += '</span>' * (open_spans - close_spans)
+    
+    return html_text
+
 def get_recent_logs():
-    """Get recent log entries from both services separately"""
+    """Get recent log entries from both services separately with color support"""
     service_logs = {}
     for service_id, config in SERVICES.items():
         # Skip logs for USB service as per requirements
@@ -52,12 +103,83 @@ def get_recent_logs():
                     lines = f.readlines()
                     # Get last 25 lines from each service
                     recent = lines[-25:] if len(lines) > 25 else lines
-                    service_logs[service_id] = ''.join(recent) if recent else "No recent logs available"
+                    if recent:
+                        log_text = ''.join(recent)
+                        # Convert ANSI color codes to HTML for BLE service
+                        if service_id == 'stdatalog-ble':
+                            log_text = ansi_to_html(log_text)
+                        service_logs[service_id] = log_text
+                    else:
+                        service_logs[service_id] = "No recent logs available"
             except:
                 service_logs[service_id] = "Error reading log file"
         else:
             service_logs[service_id] = "Log file not found"
     return service_logs
+
+def get_ble_status():
+    """Get BLE sensor connection status from logs"""
+    try:
+        log_file = SERVICES['stdatalog-ble']['log_file']
+        if not os.path.exists(log_file):
+            return {
+                'speed_sensor': {'connected': False, 'status': 'Log not found'},
+                'feedrate_sensor': {'connected': False, 'status': 'Log not found'}
+            }
+        
+        with open(log_file, 'r') as f:
+            lines = f.readlines()
+            # Get last 50 lines to check recent status
+            recent_lines = lines[-50:] if len(lines) > 50 else lines
+            recent_text = ''.join(recent_lines)
+        
+        # Check for connection status patterns
+        speed_connected = False
+        feedrate_connected = False
+        speed_status = "Unknown"
+        feedrate_status = "Unknown"
+        
+        # Look for recent connection messages
+        if "Connected to Speed BLE" in recent_text:
+            if "Speed BLE disconnected" not in recent_text.split("Connected to Speed BLE")[-1]:
+                speed_connected = True
+                speed_status = "Connected and listening"
+            else:
+                speed_status = "Disconnected, retrying..."
+        elif "Speed sensor not found" in recent_text or "Speed connection timed out" in recent_text:
+            speed_status = "Not found, retrying..."
+        elif "Starting 1-minute timer" in recent_text:
+            speed_status = "Disconnected (1min grace period)"
+        elif "Speed sensor reconnected" in recent_text:
+            speed_connected = True
+            speed_status = "Reconnected successfully"
+        
+        if "Connected to Feedrate BLE" in recent_text:
+            if "Feedrate BLE disconnected" not in recent_text.split("Connected to Feedrate BLE")[-1]:
+                feedrate_connected = True
+                feedrate_status = "Connected and listening"
+            else:
+                feedrate_status = "Disconnected, retrying..."
+        elif "Feedrate sensor not found" in recent_text or "Feedrate connection timed out" in recent_text:
+            feedrate_status = "Not found, retrying..."
+        
+        return {
+            'speed_sensor': {
+                'connected': speed_connected,
+                'status': speed_status,
+                'mac': 'F9:51:AC:0F:75:9E'
+            },
+            'feedrate_sensor': {
+                'connected': feedrate_connected,
+                'status': feedrate_status,
+                'mac': 'DE:6D:5D:2A:BD:58'
+            }
+        }
+    except Exception as e:
+        return {
+            'speed_sensor': {'connected': False, 'status': f'Error: {str(e)}'},
+            'feedrate_sensor': {'connected': False, 'status': f'Error: {str(e)}'}
+        }
 
 def get_usb_status():
     """Check if any USB stick is mounted and get info"""
@@ -173,6 +295,36 @@ HTML_TEMPLATE = """
         }
         .usb-connected { background: #d4edda; color: #155724; }
         .usb-disconnected { background: #f8d7da; color: #721c24; }
+        .ble-info { 
+            font-size: 12px; 
+            color: #6c757d; 
+            margin-top: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .ble-sensor { 
+            display: flex; 
+            align-items: center; 
+            gap: 6px;
+        }
+        .ble-led { 
+            width: 8px; 
+            height: 8px; 
+            border-radius: 50%; 
+            flex-shrink: 0;
+        }
+        .ble-led.connected { background: #28a745; }
+        .ble-led.disconnected { background: #dc3545; }
+        .ble-led.unknown { background: #6c757d; }
+        .ble-sensor-text {
+            font-size: 11px;
+            line-height: 1.2;
+        }
+        .ble-mac {
+            color: #999;
+            font-size: 10px;
+        }
         .service-header { 
             display: flex; 
             align-items: center; 
@@ -251,6 +403,7 @@ HTML_TEMPLATE = """
             overflow-y: auto; 
             white-space: pre-wrap; 
             font-size: 12px;
+            line-height: 1.4;
         }
         .logs-container {
             display: flex;
@@ -356,12 +509,40 @@ HTML_TEMPLATE = """
                         for (const [service_id, log_content] of Object.entries(data.system.logs)) {
                             const logDiv = document.getElementById(service_id + "-log");
                             if (logDiv) {
-                                logDiv.textContent = log_content;
+                                // Use innerHTML for BLE service to render HTML colors, textContent for others
+                                if (service_id === 'stdatalog-ble') {
+                                    logDiv.innerHTML = log_content;
+                                } else {
+                                    logDiv.textContent = log_content;
+                                }
                             }
                         }
                     }
                 } catch (error) {
                     console.error("Error updating logs:", error);
+                }
+
+                try {
+                    // Update BLE sensor status
+                    if (data.system.ble_status) {
+                        // Speed sensor
+                        const speedLed = document.getElementById("speed-sensor-led");
+                        const speedStatus = document.getElementById("speed-sensor-status");
+                        if (speedLed && speedStatus) {
+                            speedLed.className = "ble-led " + (data.system.ble_status.speed_sensor.connected ? "connected" : "disconnected");
+                            speedStatus.textContent = data.system.ble_status.speed_sensor.status;
+                        }
+                        
+                        // Feedrate sensor
+                        const feedrateLed = document.getElementById("feedrate-sensor-led");
+                        const feedrateStatus = document.getElementById("feedrate-sensor-status");
+                        if (feedrateLed && feedrateStatus) {
+                            feedrateLed.className = "ble-led " + (data.system.ble_status.feedrate_sensor.connected ? "connected" : "disconnected");
+                            feedrateStatus.textContent = data.system.ble_status.feedrate_sensor.status;
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error updating BLE status:", error);
                 }
 
                 try {
@@ -432,11 +613,30 @@ HTML_TEMPLATE = """
             <div class="service-card {{ 'active' if service_info.status == 'active' else 'inactive' }}">
                 <div class="service-header">
                     <div class="led {{ 'green' if service_info.status == 'active' else 'red' }}" id="{{ service_id }}-led"></div>
-                    <div>
+                    <div style="flex: 1;">
                         <div class="service-name">{{ service_info.config.name }}</div>
                         <div class="service-status {{ 'status-active' if service_info.status == 'active' else 'status-inactive' }}" id="{{ service_id }}-status">
                             {{ service_info.status.upper() }}{% if service_info.config.auto_restart %} (Auto-restart){% else %} (Manual){% endif %}
                         </div>
+                        
+                        {% if service_id == 'stdatalog-ble' %}
+                        <div class="ble-info" id="ble-status-info">
+                            <div class="ble-sensor">
+                                <div class="ble-led unknown" id="speed-sensor-led"></div>
+                                <div class="ble-sensor-text">
+                                    <strong>Speed:</strong> <span id="speed-sensor-status">Checking...</span><br>
+                                    <span class="ble-mac" id="speed-sensor-mac">F9:51:AC:0F:75:9E</span>
+                                </div>
+                            </div>
+                            <div class="ble-sensor">
+                                <div class="ble-led unknown" id="feedrate-sensor-led"></div>
+                                <div class="ble-sensor-text">
+                                    <strong>Feedrate:</strong> <span id="feedrate-sensor-status">Checking...</span><br>
+                                    <span class="ble-mac" id="feedrate-sensor-mac">DE:6D:5D:2A:BD:58</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="stats-grid">
@@ -495,7 +695,11 @@ HTML_TEMPLATE = """
                 {% for service_id, log_content in recent_logs.items() %}
                 <div class="log-column">
                     <h4>🔧 {{ services[service_id]['config']['name'] if service_id in services else service_id }} ({{ service_id }})</h4>
+                    {% if service_id == 'stdatalog-ble' %}
+                    <div class="log-content" id="{{ service_id }}-log">{{ log_content|safe }}</div>
+                    {% else %}
                     <div class="log-content" id="{{ service_id }}-log">{{ log_content }}</div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -621,6 +825,7 @@ def dashboard():
     disk_usage = get_disk_usage()
     recent_logs = get_recent_logs()
     usb_status = get_usb_status()
+    ble_status = get_ble_status()
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
@@ -631,6 +836,7 @@ def dashboard():
                                 disk_usage=disk_usage,
                                 recent_logs=recent_logs,
                                 usb_status=usb_status,
+                                ble_status=ble_status,
                                 timestamp=timestamp)
 
 @app.route("/control/<service_id>", methods=["POST"])
@@ -670,6 +876,7 @@ def api_status():
     acq_folders, cut_folders = get_acquisition_stats()
     logs = get_recent_logs() 
     usb_status = get_usb_status()
+    ble_status = get_ble_status()
 
     return jsonify({
         'services': services,
@@ -679,7 +886,8 @@ def api_status():
             'disk_usage': get_disk_usage(),
             'timestamp': datetime.now().isoformat(),
             'logs': logs,
-            'usb_status': usb_status
+            'usb_status': usb_status,
+            'ble_status': ble_status
         }
     })
 
