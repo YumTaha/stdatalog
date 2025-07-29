@@ -261,9 +261,9 @@ fi
 # Install additional Python dependencies that might be needed
 print_info "Installing additional Python dependencies..."
 if [[ -n "$PROXY" ]]; then
-    python -m pip install numpy matplotlib pandas --proxy="$PROXY"
+    python -m pip install numpy matplotlib pandas bleak colorlog --proxy="$PROXY"
 else
-    python -m pip install numpy matplotlib pandas
+    python -m pip install numpy matplotlib pandas bleak colorlog
 fi
 
 print_success "All STDATALOG-PYSDK packages installed successfully"
