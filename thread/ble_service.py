@@ -34,16 +34,16 @@ def parse_float32_le(b):
     return struct.unpack('<f', b)[0]
 
 def check_bluetooth_adapter():
-    """Check if hci1 Bluetooth adapter is ready and functional"""
+    """Check if hci0 Bluetooth adapter is ready and functional"""
     try:
         # Check if adapter is UP and RUNNING
-        result = subprocess.run(["hciconfig", "hci1"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(["hciconfig", "hci0"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if "UP RUNNING" not in result.stdout.decode():
             return False
             
         # Additional check: try to do a quick scan to verify adapter is functional
         try:
-            scan_result = subprocess.run(["timeout", "2", "hcitool", "-i", "hci1", "scan"], 
+            scan_result = subprocess.run(["timeout", "2", "hcitool", "-i", "hci0", "scan"], 
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
             # If scan command runs without error, adapter is likely functional
             return True
@@ -67,14 +67,14 @@ async def wait_for_adapter_ready():
     for attempt in range(max_attempts):
         if check_bluetooth_adapter():
             if attempt > 0:
-                logger.info(f"Bluetooth adapter hci1 is ready after {attempt + 1} attempts")
+                logger.info(f"Bluetooth adapter hci0 is ready after {attempt + 1} attempts")
             return True
         
         delay = base_delay * (2 ** attempt)  # Progressive backoff: 2, 4, 8, 16, 32, 64 seconds
-        logger.warning(f"Bluetooth adapter hci1 not ready. Waiting {delay} seconds... (attempt {attempt + 1}/{max_attempts})")
+        logger.warning(f"Bluetooth adapter hci0 not ready. Waiting {delay} seconds... (attempt {attempt + 1}/{max_attempts})")
         await asyncio.sleep(delay)
     
-    logger.error("Bluetooth adapter hci1 failed to become ready after maximum attempts")
+    logger.error("Bluetooth adapter hci0 failed to become ready after maximum attempts")
     return False
 
 class DataCollectionController:
@@ -179,7 +179,7 @@ async def ble_speed_task(controller):
 
             # Scan to rediscover
             found = False
-            devices = await BleakScanner.discover(timeout=5.0, adapter="hci1")
+            devices = await BleakScanner.discover(timeout=5.0, adapter="hci0")
             for d in devices:
                 if d.address.upper() == DEVICE_MAC_ADDRESS_SP.upper():
                     found = True
@@ -274,7 +274,7 @@ async def ble_feedrate_task(controller, ready_event):
 
             # Scan to rediscover
             found = False
-            devices = await BleakScanner.discover(timeout=5.0, adapter="hci1")
+            devices = await BleakScanner.discover(timeout=5.0, adapter="hci0")
             for d in devices:
                 if d.address.upper() == DEVICE_MAC_ADDRESS_FR.upper():
                     found = True
