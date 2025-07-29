@@ -292,7 +292,7 @@ sudo rm /etc/systemd/system/stdatalog-*.service
 sudo systemctl daemon-reload
 ```
 
-## 📞 Support
+## Support
 
 If you encounter issues:
 1. Check service logs: `./stdatalog-services logs <service>`
