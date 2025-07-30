@@ -9,6 +9,7 @@ import colorlog
 import subprocess
 import argparse
 import time
+import signal
 from datetime import datetime
 from bleak import BleakClient, BleakScanner
 
@@ -203,7 +204,7 @@ async def ble_speed_task(controller):
         logger.error("Speed BLE task aborting - adapter never became ready")
         return
 
-    while True:
+    while not shutdown_event.is_set():
         try:
             logger.info(f"Connecting to Speed BLE device at {DEVICE_MAC_ADDRESS_SP} ...")
 
@@ -217,7 +218,7 @@ async def ble_speed_task(controller):
 
             if not found:
                 logger.warning("Speed sensor not found. Retrying...")
-                await asyncio.sleep(5)
+                await interruptible_sleep(5)
                 continue
 
             await asyncio.wait_for(client.connect(), timeout=reconnect_timeout)
@@ -251,9 +252,13 @@ async def ble_speed_task(controller):
                 controller.speed_stop_timer_task.cancel()
                 controller.speed_stop_timer_task = None
             
-            while client.is_connected:
+            while client.is_connected and not shutdown_event.is_set():
                 await asyncio.sleep(1)
 
+            if shutdown_event.is_set():
+                logger.info("Speed BLE task received shutdown signal.")
+                break
+                
             logger.warning("Speed BLE disconnected.")
             
             # Log the disconnection and start delayed stop timer
@@ -284,9 +289,9 @@ async def ble_speed_task(controller):
             # Quick adapter check before retry
             if not check_bluetooth_adapter():
                 logger.warning("Bluetooth adapter issue detected. Waiting longer before retry...")
-                await asyncio.sleep(10)
+                await interruptible_sleep(10)
             else:
-                await asyncio.sleep(5)  # Normal backoff
+                await interruptible_sleep(5)  # Normal backoff
 
 async def ble_feedrate_task(controller, ready_event):
     client = BleakClient(DEVICE_MAC_ADDRESS_FR)
@@ -298,7 +303,7 @@ async def ble_feedrate_task(controller, ready_event):
         logger.error("Feedrate BLE task aborting - adapter never became ready")
         return
 
-    while True:
+    while not shutdown_event.is_set():
         try:
             logger.info(f"Connecting to Feedrate BLE device at {DEVICE_MAC_ADDRESS_FR} ...")
 
@@ -312,7 +317,7 @@ async def ble_feedrate_task(controller, ready_event):
 
             if not found:
                 logger.warning("Feedrate sensor not found. Retrying...")
-                await asyncio.sleep(5)
+                await interruptible_sleep(5)
                 continue
 
             await asyncio.wait_for(client.connect(), timeout=reconnect_timeout)
@@ -331,9 +336,13 @@ async def ble_feedrate_task(controller, ready_event):
             await client.start_notify(VELOCITY_CHAR_UUID_FR, notification_handler)
             logger.info("Listening for feedrate updates.")
             ready_event.set()
-            while client.is_connected:
+            while client.is_connected and not shutdown_event.is_set():
                 await asyncio.sleep(1)
 
+            if shutdown_event.is_set():
+                logger.info("Feedrate BLE task received shutdown signal.")
+                break
+                
             logger.warning("Feedrate BLE disconnected.")
 
         except asyncio.TimeoutError:
@@ -351,16 +360,16 @@ async def ble_feedrate_task(controller, ready_event):
             # Quick adapter check before retry
             if not check_bluetooth_adapter():
                 logger.warning("Bluetooth adapter issue detected. Waiting longer before retry...")
-                await asyncio.sleep(10)
+                await interruptible_sleep(10)
             else:
-                await asyncio.sleep(5)  # Normal backoff
+                await interruptible_sleep(5)  # Normal backoff
 
 async def ble_and_ipc_task(controller):
     logger.info(f"Connecting to CLI logger at localhost:{SOCKET_PORT}...")
     retry_count = 0
     max_retries = 30
     sock = controller.sock
-    while retry_count < max_retries:
+    while retry_count < max_retries and not shutdown_event.is_set():
         try:
             sock.connect(('127.0.0.1', SOCKET_PORT))
             logger.info("Connected to CLI logger.")
@@ -368,9 +377,12 @@ async def ble_and_ipc_task(controller):
         except ConnectionRefusedError:
             retry_count += 1
             logger.info(f"CLI logger not available yet. Retrying in 2 seconds... (attempt {retry_count}/{max_retries})")
-            await asyncio.sleep(2)
-    if retry_count >= max_retries:
-        logger.error("Failed to connect to CLI logger after maximum retries. Exiting.")
+            await interruptible_sleep(2)
+    if retry_count >= max_retries or shutdown_event.is_set():
+        if shutdown_event.is_set():
+            logger.info("Shutdown requested during CLI logger connection.")
+        else:
+            logger.error("Failed to connect to CLI logger after maximum retries. Exiting.")
         return
 
     # Orchestrate BLE connections in sequence
@@ -389,6 +401,27 @@ async def ble_and_ipc_task(controller):
             logger.error("A BLE connection failed—aborting main service.")
             return
 
+# Global shutdown flag
+shutdown_event = asyncio.Event()
+
+async def interruptible_sleep(duration):
+    """Sleep that can be interrupted by shutdown event."""
+    try:
+        await asyncio.wait_for(
+            asyncio.wait([
+                asyncio.create_task(asyncio.sleep(duration)),
+                asyncio.create_task(shutdown_event.wait())
+            ], return_when=asyncio.FIRST_COMPLETED),
+            timeout=duration + 1
+        )
+    except asyncio.TimeoutError:
+        pass
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+    shutdown_event.set()
+
 async def main():
     logger.info("Dual BLE Service starting (feedrate + speed)...")
     # NEW: force disconnection of stale BLE connections
@@ -400,7 +433,21 @@ async def main():
         tasks = [
             asyncio.create_task(ble_and_ipc_task(controller)),
         ]
-        await asyncio.gather(*tasks)
+        
+        # Wait for either tasks to complete or shutdown signal
+        done, pending = await asyncio.wait(
+            tasks + [asyncio.create_task(shutdown_event.wait())],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        # Cancel any pending tasks
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+                
     except KeyboardInterrupt:
         logger.info("Ctrl+C received, shutting down.")
     except Exception as e:
@@ -429,6 +476,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dual BLE Logger")
     parser.add_argument('--log', default="INFO", help="Set log level: DEBUG, INFO, WARNING, ERROR, CRITICAL")
     args = parser.parse_args()
+
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
 
     root_level = logging.INFO if args.log.upper() == "DEBUG" else getattr(logging, args.log.upper(), logging.INFO)
 

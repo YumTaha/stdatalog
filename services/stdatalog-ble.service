@@ -1,5 +1,5 @@
 [Unit]
-Description=STDatalog BLE Controller Service
+Description=STDatalog BLE Test Monitor Service
 After=network.target bluetooth.target
 Wants=network.target bluetooth.target
 Requires=bluetooth.target
@@ -10,7 +10,7 @@ User=kirwinr
 Group=kirwinr
 WorkingDirectory=/home/kirwinr/Desktop/stdatalog/thread
 Environment=PYTHONPATH=/home/kirwinr/Desktop/stdatalog:/home/kirwinr/Desktop/stdatalog/.venv/lib/python3.11/site-packages
-ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python ble_service.py --log DEBUG
+ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python ble_service.py
 Restart=on-failure
 RestartSec=10
 StartLimitInterval=60

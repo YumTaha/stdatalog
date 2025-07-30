@@ -4,6 +4,7 @@ import struct
 import socket
 import os
 import time
+import signal
 from datetime import datetime
 from bleak import BleakClient, BleakScanner
 import colorlog
@@ -34,6 +35,27 @@ last_command_sent = None
 _last_command_time = 0
 disconnect_timers = {}
 
+# Global shutdown flag
+shutdown_event = asyncio.Event()
+
+async def interruptible_sleep(duration):
+    """Sleep that can be interrupted by shutdown event."""
+    try:
+        await asyncio.wait_for(
+            asyncio.wait([
+                asyncio.create_task(asyncio.sleep(duration)),
+                asyncio.create_task(shutdown_event.wait())
+            ], return_when=asyncio.FIRST_COMPLETED),
+            timeout=duration + 1
+        )
+    except asyncio.TimeoutError:
+        pass
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+    shutdown_event.set()
+
 # === Logging Setup ===
 logger = logging.getLogger("BLEMonitor")
 handler = colorlog.StreamHandler()
@@ -60,10 +82,15 @@ def log_disconnection(sensor_name: str, reason: str):
 
 # === Timer for BLE reconnect ===
 async def handle_disconnect_timeout(sensor_name):
-    await asyncio.sleep(60)
-    if not ble_connected[sensor_name]:
-        _send_command("stop")
-        log_disconnection(sensor_name, "1min timeout - stop sent")
+    try:
+        await interruptible_sleep(60)
+        if not ble_connected[sensor_name] and not shutdown_event.is_set():
+            _send_command("stop")
+            log_disconnection(sensor_name, "1min timeout - stop sent")
+    except asyncio.CancelledError:
+        logger.debug(f"Disconnect timer for {sensor_name} cancelled")
+    except Exception as e:
+        logger.error(f"Error in disconnect timeout for {sensor_name}: {e}")
 
 def on_ble_disconnect(sensor_name):
     if ble_connected[sensor_name]:
@@ -83,17 +110,17 @@ def on_ble_reconnect(sensor_name):
 # === Socket Connection ===
 async def maintain_socket():
     global socket_connected, socket_writer
-    while True:
+    while not shutdown_event.is_set():
         try:
             logger.debug("Attempting socket connection...")
             reader, writer = await asyncio.open_connection(SOCKET_HOST, SOCKET_PORT)
             socket_writer = writer
             socket_connected = True
             logger.info("Socket connected")
-            while True:
+            while not shutdown_event.is_set():
                 writer.write(b'\n')
                 await writer.drain()
-                await asyncio.sleep(2)
+                await interruptible_sleep(2)
         except Exception as e:
             logger.warning(f"Socket lost: {e}")
             socket_connected = False
@@ -104,17 +131,17 @@ async def maintain_socket():
                 except:
                     pass
             socket_writer = None
-            await asyncio.sleep(2)
+            await interruptible_sleep(2)
 
 # === BLE Connection Logic ===
 async def connect_ble(name, mac, uuid, handler, ready_event=None):
     first_time = True
-    while True:
+    while not shutdown_event.is_set():
         try:
             logger.info(f"Scanning for {name}...")
             devices = await BleakScanner.discover(timeout=5.0)
             if not any(d.address.upper() == mac for d in devices):
-                await asyncio.sleep(2)
+                await interruptible_sleep(2)
                 continue
 
             logger.info(f"{name} found. Connecting...")
@@ -131,15 +158,26 @@ async def connect_ble(name, mac, uuid, handler, ready_event=None):
 
             await client.start_notify(uuid, handler)
 
-            while client.is_connected:
+            while client.is_connected and not shutdown_event.is_set():
                 await asyncio.sleep(1)
+
+            if shutdown_event.is_set():
+                logger.info(f"{name} BLE task received shutdown signal.")
+                try:
+                    if client.is_connected:
+                        await client.stop_notify(uuid)
+                        await client.disconnect()
+                        logger.info(f"Disconnected {name} BLE device.")
+                except Exception as e:
+                    logger.warning(f"{name} BLE cleanup error: {e}")
+                break
 
             logger.warning(f"{name} BLE disconnected")
             on_ble_disconnect(name)
 
         except Exception as e:
             logger.error(f"{name} BLE error: {e}")
-        await asyncio.sleep(2)
+        await interruptible_sleep(2)
 
 # === Notification Handlers ===
 def feedrate_notify_handler(sender, data):
@@ -205,22 +243,72 @@ async def ble_startup_sequence():
 
 # === Monitoring Logic ===
 async def monitor_main():
-    while True:
+    while not shutdown_event.is_set():
         if not (socket_connected and all(ble_connected.values())):
             logger.info("Waiting for all connections...")
-        await asyncio.sleep(2)
+        await interruptible_sleep(2)
 
 # === Entrypoint ===
 async def main():
     logger.info("BLE + Socket Monitor starting...")
-    await asyncio.gather(
-        maintain_socket(),
-        ble_startup_sequence(),
-        monitor_main()
-    )
+    try:
+        tasks = [
+            asyncio.create_task(maintain_socket()),
+            asyncio.create_task(ble_startup_sequence()),
+            asyncio.create_task(monitor_main())
+        ]
+        
+        # Wait for either tasks to complete or shutdown signal
+        done, pending = await asyncio.wait(
+            tasks + [asyncio.create_task(shutdown_event.wait())],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        # Cancel any pending tasks
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+                
+    except KeyboardInterrupt:
+        logger.info("Ctrl+C received, shutting down.")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+    finally:
+        try:
+            # Cancel any pending disconnect timers
+            for timer_task in disconnect_timers.values():
+                if timer_task and not timer_task.done():
+                    timer_task.cancel()
+                    try:
+                        await timer_task
+                    except asyncio.CancelledError:
+                        pass
+            
+            # Close socket connection
+            if socket_writer:
+                socket_writer.close()
+                try:
+                    await socket_writer.wait_closed()
+                except:
+                    pass
+                logger.info("Disconnected socket connection.")
+            
+            logger.info("Service shutdown complete.")
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
 
 if __name__ == "__main__":
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Shutdown requested by user.")
+        print("\nExiting by user request.")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        exit(1)
