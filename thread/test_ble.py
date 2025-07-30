@@ -2,10 +2,11 @@ import asyncio
 import logging
 import struct
 import socket
-import colorlog
-from bleak import BleakClient, BleakScanner
 import os
+import time
 from datetime import datetime
+from bleak import BleakClient, BleakScanner
+import colorlog
 
 # === Configuration ===
 SOCKET_HOST = '127.0.0.1'
@@ -20,6 +21,7 @@ UUIDS = {
 }
 FEEDRATE_START_THRESHOLD = -20.0
 SPEED_REQUIRED_THRESHOLD = 0.3
+BETWEEN_COMMANDS = 0.5  # seconds
 ACQ_FOLDER = "../acquisition_data"
 LOG_FILE = f"{ACQ_FOLDER}/ble_disconnects.txt"
 
@@ -29,20 +31,14 @@ latest_values = {name: None for name in BLE_MACS}
 socket_writer = None
 socket_connected = False
 last_command_sent = None
+_last_command_time = 0
 disconnect_timers = {}
 
 # === Logging Setup ===
 logger = logging.getLogger("BLEMonitor")
 handler = colorlog.StreamHandler()
 formatter = colorlog.ColoredFormatter(
-    "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
-    log_colors={
-        'DEBUG': 'cyan',
-        'INFO': 'white',
-        'WARNING': 'yellow',
-        'ERROR': 'red',
-        'CRITICAL': 'bold_red',
-    }
+    "%(asctime)s - %(levelname)s - %(message)s"
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -70,7 +66,7 @@ async def handle_disconnect_timeout(sensor_name):
         log_disconnection(sensor_name, "1min timeout - stop sent")
 
 def on_ble_disconnect(sensor_name):
-    if ble_connected[sensor_name]:  # Only log once
+    if ble_connected[sensor_name]:
         ble_connected[sensor_name] = False
         latest_values[sensor_name] = None
         log_disconnection(sensor_name, "disconnected")
@@ -89,18 +85,17 @@ async def maintain_socket():
     global socket_connected, socket_writer
     while True:
         try:
-            logger.debug("🔍 Attempting socket connection...")
+            logger.debug("Attempting socket connection...")
             reader, writer = await asyncio.open_connection(SOCKET_HOST, SOCKET_PORT)
             socket_writer = writer
             socket_connected = True
-            logger.info("🔌 Socket connected")
-
+            logger.info("Socket connected")
             while True:
                 writer.write(b'\n')
                 await writer.drain()
                 await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"❌ Socket lost: {e}")
+            logger.warning(f"Socket lost: {e}")
             socket_connected = False
             if socket_writer:
                 socket_writer.close()
@@ -114,23 +109,21 @@ async def maintain_socket():
 # === BLE Connection Logic ===
 async def connect_ble(name, mac, uuid, handler, ready_event=None):
     first_time = True
-
     while True:
         try:
-            logger.info(f"🔍 Scanning for {name}...")
+            logger.info(f"Scanning for {name}...")
             devices = await BleakScanner.discover(timeout=5.0)
             if not any(d.address.upper() == mac for d in devices):
                 await asyncio.sleep(2)
                 continue
 
-            logger.info(f"📡 {name} found. Connecting...")
+            logger.info(f"{name} found. Connecting...")
             client = BleakClient(mac)
             await client.connect(timeout=10.0)
-
             if not client.is_connected:
                 raise RuntimeError(f"{name} connection failed")
 
-            logger.info(f"✅ {name} BLE connected")
+            logger.info(f"{name} BLE connected")
             on_ble_reconnect(name)
             if ready_event and first_time:
                 ready_event.set()
@@ -141,11 +134,11 @@ async def connect_ble(name, mac, uuid, handler, ready_event=None):
             while client.is_connected:
                 await asyncio.sleep(1)
 
-            logger.warning(f"⚠️ {name} BLE disconnected")
+            logger.warning(f"{name} BLE disconnected")
             on_ble_disconnect(name)
 
         except Exception as e:
-            logger.error(f"⚠️ {name} BLE error: {e}")
+            logger.error(f"{name} BLE error: {e}")
         await asyncio.sleep(2)
 
 # === Notification Handlers ===
@@ -175,7 +168,6 @@ def _check_and_send_command():
     global last_command_sent
     speed = latest_values["Speed"]
     feed = latest_values["Feedrate"]
-
     if speed is None or feed is None:
         return
 
@@ -189,19 +181,25 @@ def _check_and_send_command():
             last_command_sent = "stop"
 
 def _send_command(cmd: str):
+    global _last_command_time
+    now = time.monotonic()
+    if now - _last_command_time < BETWEEN_COMMANDS:
+        return
+    _last_command_time = now
+
     if socket_connected and socket_writer:
         try:
             socket_writer.write((cmd + "\n").encode())
-            logger.info(f"📤 Sent command: {cmd}")
+            logger.info(f"Sent command: {cmd}")
         except Exception as e:
-            logger.warning(f"❌ Failed to send command: {e}")
+            logger.warning(f"Failed to send command: {e}")
 
 # === BLE Sequence Orchestration ===
 async def ble_startup_sequence():
     ready_event = asyncio.Event()
     task_feed = asyncio.create_task(connect_ble("Feedrate", BLE_MACS["Feedrate"], UUIDS["Feedrate"], feedrate_notify_handler, ready_event))
     await ready_event.wait()
-    logger.info("📬 Feedrate ready. Starting Speed BLE task...")
+    logger.info("Feedrate ready. Starting Speed BLE task...")
     task_speed = asyncio.create_task(connect_ble("Speed", BLE_MACS["Speed"], UUIDS["Speed"], speed_notify_handler))
     await asyncio.gather(task_feed, task_speed)
 
@@ -209,12 +207,12 @@ async def ble_startup_sequence():
 async def monitor_main():
     while True:
         if not (socket_connected and all(ble_connected.values())):
-            logger.info("⏸ Waiting for all connections...")
+            logger.info("Waiting for all connections...")
         await asyncio.sleep(2)
 
 # === Entrypoint ===
 async def main():
-    logger.info("🚀 BLE + Socket Monitor starting...")
+    logger.info("BLE + Socket Monitor starting...")
     await asyncio.gather(
         maintain_socket(),
         ble_startup_sequence(),
@@ -225,4 +223,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("🧼 Shutdown requested by user.")
+        logger.info("Shutdown requested by user.")
