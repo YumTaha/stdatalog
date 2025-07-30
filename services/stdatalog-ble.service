@@ -10,7 +10,7 @@ User=kirwinr
 Group=kirwinr
 WorkingDirectory=/home/kirwinr/Desktop/stdatalog/thread
 Environment=PYTHONPATH=/home/kirwinr/Desktop/stdatalog:/home/kirwinr/Desktop/stdatalog/.venv/lib/python3.11/site-packages
-ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python ble_service.py
+ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python ble_service.py --log DEBUG
 Restart=on-failure
 RestartSec=10
 StartLimitInterval=60

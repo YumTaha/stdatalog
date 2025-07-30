@@ -8,6 +8,7 @@ import logging
 import colorlog
 import subprocess
 import argparse
+import time
 from datetime import datetime
 from bleak import BleakClient, BleakScanner
 
@@ -29,6 +30,8 @@ ACQ_FOLDER = "../acquisition_data"
 DOWN_THRESHOLD_IN_MIN = -15  # in/min
 # Speed sensor logic
 START_THRESHOLD_SP = 0.5  # rad/s
+# Throttling for socket commands
+COMMAND_SEND_MIN_INTERVAL_SEC = 2.0  # <-- changeable; 2 seconds default
 
 def parse_float32_le(b):
     return struct.unpack('<f', b)[0]
@@ -92,6 +95,20 @@ class DataCollectionController:
         self.speed_disconnect_time = None
         self.speed_stop_timer_task = None
 
+        # NEW: last-send timestamp
+        self._last_send_monotonic = 0.0
+
+    def try_send(self, data: bytes):
+        """Send only if at least COMMAND_MIN_INTERVAL_SEC has elapsed since last send."""
+        now = time.monotonic()
+        if now - self._last_send_monotonic < COMMAND_SEND_MIN_INTERVAL_SEC:
+            return  # ignore if too soon
+        try:
+            self.sock.sendall(data)
+            self._last_send_monotonic = now
+        except Exception as e:
+            logger.warning(f"Failed to send command: {e}")
+            
     async def update_data_collection_state(self):
         async with self.lock:
             new_machine_state = None
@@ -100,19 +117,19 @@ class DataCollectionController:
                 new_machine_state = "CUTTING (blade running, moving down)"
                 if self.sent_state != 'started':
                     logger.info("Criteria met: Sending 'start'")
-                    self.sock.sendall(b'start\n')
+                    self.try_send(b'start\n')
                     self.sent_state = 'started'
             elif self.speed_active and not self.feedrate_active:
                 new_machine_state = "BLADE RESETTING (blade running, moving up)"
                 if self.sent_state != 'stopped':
                     logger.info("Criteria NOT met: Sending 'stop'")
-                    self.sock.sendall(b'stop\n')
+                    self.try_send(b'stop\n')
                     self.sent_state = 'stopped'
             else:
                 new_machine_state = "BLADE STOPPED (no spinning)"
                 if self.sent_state != 'stopped':
                     logger.info("Criteria NOT met: Sending 'stop'")
-                    self.sock.sendall(b'stop\n')
+                    self.try_send(b'stop\n')
                     self.sent_state = 'stopped'
 
             # Only log if the state changed, to avoid log spam

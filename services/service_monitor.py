@@ -117,8 +117,15 @@ def get_recent_logs():
             service_logs[service_id] = "Log file not found"
     return service_logs
 
+# Global state cache for BLE status
+LAST_KNOWN_BLE_STATUS = {
+    'speed_sensor': {'connected': False, 'status': 'Unknown'},
+    'feedrate_sensor': {'connected': False, 'status': 'Unknown'}
+}
+
 def get_ble_status():
-    """Get BLE sensor connection status from logs"""
+    """Get BLE sensor connection status from logs or fallback to last known state"""
+    global LAST_KNOWN_BLE_STATUS
     try:
         log_file = SERVICES['stdatalog-ble']['log_file']
         if not os.path.exists(log_file):
@@ -126,60 +133,72 @@ def get_ble_status():
                 'speed_sensor': {'connected': False, 'status': 'Log not found'},
                 'feedrate_sensor': {'connected': False, 'status': 'Log not found'}
             }
-        
+
         with open(log_file, 'r') as f:
             lines = f.readlines()
-            # Get last 50 lines to check recent status
             recent_lines = lines[-50:] if len(lines) > 50 else lines
             recent_text = ''.join(recent_lines)
-        
-        # Check for connection status patterns
-        speed_connected = False
-        feedrate_connected = False
-        speed_status = "Unknown"
-        feedrate_status = "Unknown"
-        
-        # Look for recent connection messages
+
+        updated = False
+
         if "Connected to Speed BLE" in recent_text:
             if "Speed BLE disconnected" not in recent_text.split("Connected to Speed BLE")[-1]:
-                speed_connected = True
-                speed_status = "Connected and listening"
+                LAST_KNOWN_BLE_STATUS['speed_sensor'] = {
+                    'connected': True,
+                    'status': "Connected and listening"
+                }
+                updated = True
             else:
-                speed_status = "Disconnected, retrying..."
+                LAST_KNOWN_BLE_STATUS['speed_sensor'] = {
+                    'connected': False,
+                    'status': "Disconnected, retrying..."
+                }
+                updated = True
         elif "Speed sensor not found" in recent_text or "Speed connection timed out" in recent_text:
-            speed_status = "Not found, retrying..."
-        elif "Starting 1-minute timer" in recent_text:
-            speed_status = "Disconnected (1min grace period)"
+            LAST_KNOWN_BLE_STATUS['speed_sensor'] = {
+                'connected': False,
+                'status': "Not found, retrying..."
+            }
+            updated = True
         elif "Speed sensor reconnected" in recent_text:
-            speed_connected = True
-            speed_status = "Reconnected successfully"
-        
+            LAST_KNOWN_BLE_STATUS['speed_sensor'] = {
+                'connected': True,
+                'status': "Reconnected successfully"
+            }
+            updated = True
+
         if "Connected to Feedrate BLE" in recent_text:
             if "Feedrate BLE disconnected" not in recent_text.split("Connected to Feedrate BLE")[-1]:
-                feedrate_connected = True
-                feedrate_status = "Connected and listening"
+                LAST_KNOWN_BLE_STATUS['feedrate_sensor'] = {
+                    'connected': True,
+                    'status': "Connected and listening"
+                }
+                updated = True
             else:
-                feedrate_status = "Disconnected, retrying..."
+                LAST_KNOWN_BLE_STATUS['feedrate_sensor'] = {
+                    'connected': False,
+                    'status': "Disconnected, retrying..."
+                }
+                updated = True
         elif "Feedrate sensor not found" in recent_text or "Feedrate connection timed out" in recent_text:
-            feedrate_status = "Not found, retrying..."
-        
-        return {
-            'speed_sensor': {
-                'connected': speed_connected,
-                'status': speed_status,
-                'mac': 'F9:51:AC:0F:75:9E'
-            },
-            'feedrate_sensor': {
-                'connected': feedrate_connected,
-                'status': feedrate_status,
-                'mac': 'DE:6D:5D:2A:BD:58'
+            LAST_KNOWN_BLE_STATUS['feedrate_sensor'] = {
+                'connected': False,
+                'status': "Not found, retrying..."
             }
-        }
+            updated = True
+
+        # Add MAC addresses before returning
+        LAST_KNOWN_BLE_STATUS['speed_sensor']['mac'] = 'F9:51:AC:0F:75:9E'
+        LAST_KNOWN_BLE_STATUS['feedrate_sensor']['mac'] = 'DE:6D:5D:2A:BD:58'
+
+        return LAST_KNOWN_BLE_STATUS
+
     except Exception as e:
         return {
             'speed_sensor': {'connected': False, 'status': f'Error: {str(e)}'},
             'feedrate_sensor': {'connected': False, 'status': f'Error: {str(e)}'}
         }
+
 
 def get_usb_status():
     """Check if any USB stick is mounted and get info"""
