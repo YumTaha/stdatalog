@@ -36,6 +36,19 @@ COMMAND_SEND_MIN_INTERVAL_SEC = 2.0  # <-- changeable; 2 seconds default
 def parse_float32_le(b):
     return struct.unpack('<f', b)[0]
 
+def disconnect_all_ble_devices():
+    """Forcefully disconnect all BLE devices via bluetoothctl at startup."""
+    try:
+        output = subprocess.check_output("bluetoothctl devices Connected", shell=True, text=True)
+        lines = output.strip().splitlines()
+        for line in lines:
+            if line.startswith("Device"):
+                mac = line.split()[1]
+                subprocess.run(f"bluetoothctl disconnect {mac}", shell=True)
+                logger.info(f"Forcefully disconnected {mac}")
+    except Exception as e:
+        logger.warning(f"Failed to disconnect BLE devices at startup: {e}")
+
 def check_bluetooth_adapter():
     """Check if hci0 Bluetooth adapter is ready and functional"""
     try:
@@ -378,6 +391,9 @@ async def ble_and_ipc_task(controller):
 
 async def main():
     logger.info("Dual BLE Service starting (feedrate + speed)...")
+    # NEW: force disconnection of stale BLE connections
+    disconnect_all_ble_devices()
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     controller = DataCollectionController(sock)
     try:
