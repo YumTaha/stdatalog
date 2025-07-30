@@ -22,7 +22,7 @@ UUIDS = {
 }
 FEEDRATE_START_THRESHOLD = -20.0
 SPEED_REQUIRED_THRESHOLD = 0.3
-BETWEEN_COMMANDS = 0.5  # seconds
+BETWEEN_COMMANDS = 0.2  # seconds
 ACQ_FOLDER = "../acquisition_data"
 LOG_FILE = f"{ACQ_FOLDER}/ble_disconnects.txt"
 
