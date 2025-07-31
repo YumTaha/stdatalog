@@ -20,9 +20,9 @@ UUIDS = {
     "Feedrate": "2772836b-8bb0-4d0f-a52c-254b5d1fa438",
     "Speed": "04403980-1579-4b57-81eb-bfcdce019b9f"
 }
-FEEDRATE_START_THRESHOLD = -20.0
+FEEDRATE_START_THRESHOLD = -0.3
 SPEED_REQUIRED_THRESHOLD = 0.3
-BETWEEN_COMMANDS = 0.2  # seconds
+BETWEEN_COMMANDS = 1  # seconds
 ACQ_FOLDER = "../acquisition_data"
 LOG_FILE = f"{ACQ_FOLDER}/ble_disconnects.txt"
 
@@ -214,7 +214,7 @@ async def connect_ble(name, mac, uuid, handler, ready_event=None):
 # === Notification Handlers ===
 def feedrate_notify_handler(sender, data):
     raw = parse_float32_le(data)
-    v_in_min = round(raw * 39.3701 * 60, 3)
+    v_in_min = round(raw * 39.3701 * 60 / 1000, 3)
     latest_values["Feedrate"] = v_in_min
     _print_debug()
     _check_and_send_command()
@@ -232,7 +232,7 @@ def _print_debug():
         f = latest_values["Feedrate"]
         speed_str = f"{s:.2f}" if s is not None else "###"
         feed_str = f"{f:.2f}" if f is not None else "###"
-        logger.debug(f"({speed_str}, {feed_str})")
+        logger.debug(f"({speed_str} rad/s, {feed_str} in/min)")
 
 def _check_and_send_command():
     global last_command_sent
