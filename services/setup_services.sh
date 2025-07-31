@@ -103,6 +103,9 @@ show_status() {
 main() {
     echo -e "${GREEN}🎯 STDatalog Service Setup${NC}"
     echo "========================================="
+
+    echo "  Unblocking Bluetooth and bringing up hci0..."
+    sudo rfkill unblock bluetooth && sudo hciconfig hci0 up
     
     check_sudo
     install_dependencies
