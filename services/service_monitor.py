@@ -13,6 +13,10 @@ import re
 from datetime import datetime
 import psutil
 import sys
+from flask import session, abort, url_for
+from functools import wraps
+
+
 
 # Add the parent of this file’s directory to PYTHONPATH so 'thread' is importable
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -22,6 +26,10 @@ ACQ_FOLDER = find_subfolder("acquisition_data")
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# === Password Config ===
+DASHBOARD_PASSWORD = "qwerty"
+app.secret_key = "qwerty"  # Needed for sessions
 
 # Service configuration
 SERVICES = {
@@ -43,7 +51,53 @@ SERVICES = {
     }
 }
 
-# Acquisition folder monitoring
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        pw = request.form.get("password", "")
+        if pw == DASHBOARD_PASSWORD:
+            session["logged_in"] = True
+            return redirect(url_for("dashboard"))
+        else:
+            return "<h3>Incorrect password</h3><a href='/login'>Try again</a>", 401
+
+    return '''
+        <html><head>
+        <style>
+        body {
+            background: #111;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: sans-serif;
+        }
+        input[type="password"] {
+            padding: 10px;
+            font-size: 16px;
+            width: 200px;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            margin-left: 10px;
+        }
+        </style></head><body>
+        <form method="POST">
+            <input type="password" name="password" placeholder="Enter password" autofocus/>
+            <button type="submit">Login</button>
+        </form>
+        </body></html>
+    '''
 
 def ansi_to_html(text):
     """Convert ANSI color codes to HTML with colors matching colorlog setup"""
@@ -898,6 +952,7 @@ def get_disk_usage():
 
 
 @app.route("/")
+@login_required
 def dashboard():
     # Get service information
     services = {}
@@ -930,6 +985,7 @@ def dashboard():
                                 timestamp=timestamp)
 
 @app.route("/control/<service_id>", methods=["POST"])
+@login_required
 def control_service(service_id):
     if service_id not in SERVICES:
         return "Service not found", 404
