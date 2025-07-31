@@ -99,6 +99,34 @@ done
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+print_header "Step 0: Disabling Onboard Wi-Fi and Bluetooth"
+
+print_info "Disabling onboard Wi-Fi and Bluetooth via /boot/firmware/config.txt..."
+
+# Confirm the file exists
+CONFIG_FILE="/boot/firmware/config.txt"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    print_error "Could not find config.txt at $CONFIG_FILE"
+    exit 1
+fi
+
+# Add the overlays only if they are not already present
+if ! grep -q "dtoverlay=pi3-disable-wifi" "$CONFIG_FILE"; then
+    echo "dtoverlay=pi3-disable-wifi" | sudo tee -a "$CONFIG_FILE" > /dev/null
+    print_success "Added: dtoverlay=pi3-disable-wifi"
+else
+    print_info "dtoverlay=pi3-disable-wifi already set"
+fi
+
+if ! grep -q "dtoverlay=pi3-disable-bt" "$CONFIG_FILE"; then
+    echo "dtoverlay=pi3-disable-bt" | sudo tee -a "$CONFIG_FILE" > /dev/null
+    print_success "Added: dtoverlay=pi3-disable-bt"
+else
+    print_info "dtoverlay=pi3-disable-bt already set"
+fi
+
+print_warning "You must reboot the system for these changes to take effect!"
+
 print_header "Step 1: System Requirements Check"
 
 # Check OS
@@ -208,13 +236,32 @@ python3 -m venv .venv
 print_info "Activating virtual environment..."
 source .venv/bin/activate
 
-# Upgrade pip
-print_info "Upgrading pip..."
+# Force pip to ignore PiWheels completely
+print_info "Overriding environment variables to disable PiWheels..."
+export PIP_INDEX_URL=https://pypi.org/simple
+unset PIP_EXTRA_INDEX_URL  # this is the crucial line!
+export PIP_NO_INDEX=0
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Show effective pip config to verify
+print_info "Effective pip index settings:"
+python -m pip config list
+
+# Downgrade pip to pre-warning version to avoid PiWheels wheel deprecation messages
+print_info "Downgrading pip to 23.1.2 to avoid deprecated wheel filename warnings..."
 if [[ -n "$PROXY" ]]; then
-    python -m pip install --upgrade pip --proxy="$PROXY"
+    python -m pip install --upgrade pip==23.1.2 --proxy="$PROXY"
 else
-    python -m pip install --upgrade pip
+    python -m pip install --upgrade pip==23.1.2
 fi
+
+# Configure pip to use only PyPI and avoid PiWheels (prevents malformed wheel warnings)
+print_info "Setting pip to use PyPI only..."
+python -m pip config set global.index-url https://pypi.org/simple
+
+# Clear old cached wheels that may include bad filenames (optional but recommended)
+print_info "Purging pip cache..."
+python -m pip cache purge || true
 
 print_success "Virtual environment created and activated"
 
@@ -267,6 +314,14 @@ else
 fi
 
 print_success "All STDATALOG-PYSDK packages installed successfully"
+
+# Optional final pip upgrade for user convenience
+print_info "Upgrading pip to latest version for future use..."
+if [[ -n "$PROXY" ]]; then
+    python -m pip install --upgrade pip --proxy="$PROXY"
+else
+    python -m pip install --upgrade pip
+fi
 
 print_header "Step 5: USB Driver Configuration"
 
@@ -390,7 +445,7 @@ fi
 
 # Test example availability
 print_info "Checking example scripts..."
-if [[ -f "stdatalog_examples/cli_applications/stdatalog/CLI/stdatalog_CLI.py" ]]; then
+if [[ -f "stdatalog_examples/gui_applications/stdatalog/CLI/stdatalog_CLI.py" ]]; then
     print_success "CLI examples found"
 else
     print_warning "CLI examples not found"
@@ -410,31 +465,20 @@ echo ""
 print_success "STDATALOG-PYSDK has been successfully installed!"
 echo ""
 print_info "Next steps:"
-echo "  1. Activate the virtual environment:"
-echo "     source .venv/bin/activate"
+echo "  1. Reboot your computer:"
+echo "     sudo reboot"
 echo ""
-echo "  2. Connect your STWINBX1 board"
+echo "  2. After reboot, run:"
+echo "     /home/kirwinr/Desktop/stdatalog/services/setup_services.sh"
 echo ""
-
-if [[ "$SKIP_USB" != true ]]; then
-    echo "  3. Reboot your system to ensure USB drivers are loaded:"
-    echo "     sudo reboot"
-    echo ""
-fi
-
-echo "  4. Test the installation:"
-if [[ "$NO_GUI" != true ]]; then
-    echo "     python stdatalog_examples/gui_applications/stdatalog/GUI/stdatalog_GUI.py"
-else
-    echo "     python stdatalog_examples/cli_applications/stdatalog/CLI/stdatalog_CLI.py"
-fi
+echo "  3. Connect your STWINBX1 board"
+echo ""
+echo "  4. Open web dashboard shown in the terminal after running setup_services.sh"
 echo ""
 
 if [[ "$SKIP_USB" != true ]]; then
     print_warning "IMPORTANT: A system reboot is recommended to ensure USB drivers work correctly!"
 fi
-
-print_info "For more examples, check the stdatalog_examples directory"
 
 echo ""
 print_success "Setup completed successfully! 🎉"
