@@ -95,6 +95,10 @@ show_status() {
     echo "  Service status: systemctl status stdatalog-cli"
 }
 
+# Run find_root.py to generate stdatalog_root.json
+echo -e "${BLUE}🔍 Running stdatalog root finder...${NC}"
+python3 "$(dirname "$0")/../thread/find_root.py"
+
 # Main execution
 main() {
     echo -e "${GREEN}🎯 STDatalog Service Setup${NC}"

@@ -4,10 +4,11 @@ import struct
 import socket
 import os
 import time
+import colorlog
 import signal
 from datetime import datetime
 from bleak import BleakClient, BleakScanner
-import colorlog
+from thread.find_root import find_subfolder
 
 # === Configuration ===
 SOCKET_HOST = '127.0.0.1'
@@ -23,8 +24,11 @@ UUIDS = {
 FEEDRATE_START_THRESHOLD = -0.3
 SPEED_REQUIRED_THRESHOLD = 0.3
 BETWEEN_COMMANDS = 1  # seconds
-ACQ_FOLDER = "../acquisition_data"
-LOG_FILE = f"{ACQ_FOLDER}/ble_disconnects.txt"
+ACQ_FOLDER = find_subfolder("acquisition_data")
+if not ACQ_FOLDER:
+    raise RuntimeError("acquisition_data folder not found.")
+LOG_FILE = os.path.join(ACQ_FOLDER, "ble_disconnects.txt")
+
 
 # === Globals ===
 ble_connected = {name: False for name in BLE_MACS}

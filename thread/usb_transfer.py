@@ -10,14 +10,13 @@ import fcntl
 import errno
 from contextlib import contextmanager
 from pathlib import Path
-
-# Resolve acquisition_data relative to this file:
-SCRIPT_DIR = Path(__file__).resolve().parent          # .../thread
-PROJECT_ROOT = SCRIPT_DIR.parent                      # project root
+from thread.find_root import find_subfolder
 
 # =================== Configuration ===================
-
-ACQ_FOLDER = str((PROJECT_ROOT / "acquisition_data").resolve())
+ACQ_FOLDER = find_subfolder("acquisition_data")
+if not ACQ_FOLDER:
+    raise RuntimeError("acquisition_data folder not found.")
+    
 POLL_INTERVAL = 4  # seconds
 TRANSFER_TRACK_FILE = "transferred.txt"
 MIN_CUT_FOLDERS = 1  # always keep at least X folders in acquisition_data

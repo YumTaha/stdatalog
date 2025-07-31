@@ -12,7 +12,15 @@ import time
 import re
 from datetime import datetime
 import psutil
+import sys
 
+# Add the parent of this file’s directory to PYTHONPATH so 'thread' is importable
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from thread.find_root import find_subfolder
+ACQ_FOLDER = find_subfolder("acquisition_data")
+
+# Initialize Flask app
 app = Flask(__name__)
 
 # Service configuration
@@ -36,8 +44,6 @@ SERVICES = {
 }
 
 # Acquisition folder monitoring
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ACQ_FOLDER = os.path.join(SCRIPT_DIR, "acquisition_data")
 
 def ansi_to_html(text):
     """Convert ANSI color codes to HTML with colors matching colorlog setup"""
