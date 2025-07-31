@@ -60,7 +60,17 @@ def signal_handler(signum, frame):
 logger = logging.getLogger("BLEMonitor")
 handler = colorlog.StreamHandler()
 formatter = colorlog.ColoredFormatter(
-    "%(asctime)s - %(levelname)s - %(message)s"
+    "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG':    'cyan',
+        'INFO':     'white', 
+        'WARNING':  'yellow',
+        'ERROR':    'red',
+        'CRITICAL': 'bold_red',
+    },
+    force_color=True  # Force colors even when redirected to file
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
