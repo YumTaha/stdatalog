@@ -11,6 +11,41 @@ import glob
 import signal
 from datetime import datetime
 
+# --- LOGGING SETUP ---
+import logging
+import colorlog
+
+LOG_FILE = os.path.expanduser("/home/kirwinr/logs/stdatalog-cli.log")
+
+logger = logging.getLogger("HSDatalogApp")
+logger.setLevel(logging.INFO)
+
+# File handler (no ANSI)
+file_handler = logging.FileHandler(LOG_FILE, mode='a')
+file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'))
+
+# Console handler (with color if TTY)
+console_handler = logging.StreamHandler()
+if sys.stderr.isatty():
+    console_handler.setFormatter(colorlog.ColoredFormatter(
+        '%(log_color)s%(levelname)s - %(message)s',
+        log_colors={
+            'DEBUG': 'cyan',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'bold_red',
+        }
+    ))
+else:
+    console_handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+
+# Add handlers
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
 # ROOT:
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # Go up as needed to reach your real project root, e.g.
@@ -41,30 +76,30 @@ async def interruptible_sleep(duration):
 
 def signal_handler(signum, frame):
     """Handle shutdown signals gracefully"""
-    print(f"[SIGNAL] Received signal {signum}, initiating graceful shutdown...")
+    logger.info(f"[SIGNAL] Received signal {signum}, initiating graceful shutdown...")
     shutdown_event.set()
 
 # Ensure the TUI and SDK are in the path
-print("[STARTUP] Adding TUI path to sys.path...")
+logger.debug("[STARTUP] Adding TUI path to sys.path...")
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'TUI')))
-print("[STARTUP] Importing stdatalog_TUI...")
+logger.debug("[STARTUP] Importing stdatalog_TUI...")
 from stdatalog_TUI import HSDInfo
-print("[STARTUP] Importing HSDLink...")
+logger.debug("[STARTUP] Importing HSDLink...")
 from stdatalog_core.HSD_link.HSDLink import HSDLink
-print("[STARTUP] All imports completed!")
+logger.debug("[STARTUP] All imports completed!")
 
 async def async_socket_listener(state):
     server = await asyncio.start_server(
         lambda r, w: handle_client(r, w, state),
         '127.0.0.1', SOCKET_PORT)
     addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
-    print(f'[IPC] Async IPC server running on {addrs}')
+    logger.info(f'[IPC] Async IPC server running on {addrs}')
     async with server:
         await server.serve_forever()
 
 async def handle_client(reader, writer, state):
     addr = writer.get_extra_info('peername')
-    print(f'[IPC] Connected by {addr}')
+    logger.info(f'[IPC] Connected by {addr}')
     try:
         while not shutdown_event.is_set():
             try:
@@ -73,7 +108,7 @@ async def handle_client(reader, writer, state):
                 continue  # Check shutdown event again
             
             if not data:
-                print(f'[IPC] Disconnected by {addr}')
+                logger.warning(f'[IPC] Disconnected by {addr}')
                 break
             cmd = data.decode('utf-8').strip().lower()
             if cmd == "start" and not state["running"]:
@@ -84,7 +119,7 @@ async def handle_client(reader, writer, state):
                 state["command"] = "exit"
                 break
     except ConnectionResetError:
-        print(f"[IPC] Disconnected by {addr}")
+        logger.warning(f"[IPC] Disconnected by {addr}")
     finally:
         writer.close()
         await writer.wait_closed()
@@ -105,7 +140,7 @@ def get_next_cut_number(parent_folder):
 
 async def cut_logging_task(state):
     # ---- Device/SDK Initialization ----
-    print("Initializing STDatalog CLI...")
+    logger.info("Initializing STDatalog CLI...")
     tui_flags = HSDInfo.TUIFlags(
         output_folder=OUTPUT_FOLDER,
         sub_datetime_folder=True,
@@ -117,8 +152,8 @@ async def cut_logging_task(state):
         time_sec=-1,
         interactive_mode=False,
     )
-    
-    print("Creating HSDInfo instance...")
+
+    logger.info("Creating HSDInfo instance...")
     try:
         # Run device detection in a thread to avoid blocking the async loop
         def create_hsd_info():
@@ -130,25 +165,25 @@ async def cut_logging_task(state):
             future = executor.submit(create_hsd_info)
             try:
                 hsd_info = await asyncio.get_event_loop().run_in_executor(None, lambda: future.result(timeout=30))
-                print("HSDInfo created successfully!")
+                logger.info("HSDInfo created successfully!")
             except concurrent.futures.TimeoutError:
-                print("ERROR: Device detection timeout after 30 seconds!")
-                print("Please check that your STMicroelectronics device is connected and try again.")
+                logger.error("ERROR: Device detection timeout after 30 seconds!")
+                logger.error("Please check that your STMicroelectronics device is connected and try again.")
                 state["command"] = "exit"
                 return
     except Exception as e:
-        print(f"ERROR: Failed to initialize device connection: {e}")
-        print("Please check that your STMicroelectronics device is connected and try again.")
+        logger.error(f"ERROR: Failed to initialize device connection: {e}")
+        logger.error("Please check that your STMicroelectronics device is connected and try again.")
         state["command"] = "exit"
         return
 
     if len(hsd_info.device_list) == 0:
-        print("No compatible devices connected! Please connect a device and try again.")
+        logger.error("No compatible devices connected! Please connect a device and try again.")
         state["command"] = "exit"
         return
 
     if len(hsd_info.device_list) > 1:
-        print(f"Multiple devices found ({len(hsd_info.device_list)}). Using the first one.")
+        logger.warning(f"Multiple devices found ({len(hsd_info.device_list)}). Using the first one.")
 
     if hsd_info.selected_device_id is None:
         hsd_info.selected_device_id = 0
@@ -170,48 +205,48 @@ async def cut_logging_task(state):
     hsd_info.set_rtc()
     hsd_info.check_output_folder()
 
-    print(f"Connected to device: {hsd_info.selected_fw_info}")
-    print(f"Active sensors: {len(hsd_info.sensor_list) if hsd_info.sensor_list else 0}")
-    print(f"Output folder: {hsd_info.output_acquisition_path}")
-    print(f"Acquisition cycle: {ACQ_TIME}s logging, {DELAY}s pause")
-    print(f"Waiting for external commands via IPC socket on port {SOCKET_PORT}...")
+    logger.info(f"Connected to device: {hsd_info.selected_fw_info}")
+    logger.info(f"Active sensors: {len(hsd_info.sensor_list) if hsd_info.sensor_list else 0}")
+    logger.info(f"Output folder: {hsd_info.output_acquisition_path}")
+    logger.info(f"Acquisition cycle: {ACQ_TIME}s logging, {DELAY}s pause")
+    logger.info(f"Waiting for external commands via IPC socket on port {SOCKET_PORT}...")
 
     cut_number = get_next_cut_number(OUTPUT_FOLDER)
 
     while not shutdown_event.is_set():
         # Check for shutdown signal first
         if shutdown_event.is_set():
-            print("[SHUTDOWN] Graceful shutdown requested.")
+            logger.info("[SHUTDOWN] Graceful shutdown requested.")
             state["command"] = "exit"
             break
             
         # Exit condition
         if state["command"] == "exit":
-            print("Exiting program. Goodbye.")
+            logger.info("Exiting program. Goodbye.")
             break
 
         # Start new cut when commanded and not already running
         if state["command"] == "start" and not state["running"]:
             cut_folder = os.path.join(OUTPUT_FOLDER, f"cut_{cut_number}")
             os.makedirs(cut_folder, exist_ok=True)
-            
-            print(f"Starting acquisition cycle {cut_number}")
-            print(f"Cut folder: {cut_folder}")
-            
+
+            logger.info(f"Starting acquisition cycle {cut_number}")
+            logger.info(f"Cut folder: {cut_folder}")
+
             # Reset output folder to main directory for logging
             hsd_info.tui_flags.output_folder = OUTPUT_FOLDER
             hsd_info.output_acquisition_path = OUTPUT_FOLDER
             hsd_info.update_acq_params()
             hsd_info.check_output_folder()
 
-            print(f"Starting periodic logging: {ACQ_TIME}s log, {DELAY}s pause. Send 'stop' to end safely.")
+            logger.info(f"Starting periodic logging: {ACQ_TIME}s log, {DELAY}s pause. Send 'stop' to end safely.")
             state["running"] = True
             state["command"] = None
 
             while state["running"] and not shutdown_event.is_set():
                 # Check for shutdown signal
                 if shutdown_event.is_set():
-                    print("[SHUTDOWN] Graceful shutdown requested during acquisition.")
+                    logger.info("[SHUTDOWN] Graceful shutdown requested during acquisition.")
                     state["running"] = False
                     state["command"] = "exit"
                     break
@@ -222,16 +257,16 @@ async def cut_logging_task(state):
                     existing_folders = {f for f in os.listdir(OUTPUT_FOLDER) 
                                       if os.path.isdir(os.path.join(OUTPUT_FOLDER, f)) 
                                       and not f.startswith('cut_')}
-                
-                print(f"Starting log cycle...")
+
+                logger.info(f"Starting log cycle...")
                 hsd_info.start_log()
                 await interruptible_sleep(ACQ_TIME)
                 hsd_info.stop_log()
-                print("Log cycle complete.")
-                
+                logger.info(f"Log cycle complete.")
+
                 # Check for shutdown again after logging
                 if shutdown_event.is_set():
-                    print("[SHUTDOWN] Graceful shutdown requested after logging.")
+                    logger.info("[SHUTDOWN] Graceful shutdown requested after logging.")
                     state["running"] = False
                     state["command"] = "exit"
                     break
@@ -249,41 +284,41 @@ async def cut_logging_task(state):
                         src_path = os.path.join(OUTPUT_FOLDER, folder_name)
                         dst_path = os.path.join(cut_folder, folder_name)
                         try:
-                            print(f"Moving {folder_name} to {cut_folder}")
+                            logger.info(f"Moving {folder_name} to {cut_folder}")
                             shutil.move(src_path, dst_path)
                         except Exception as e:
-                            print(f"Error moving folder {folder_name}: {e}")
-                
-                print("Waiting for next cycle...")
+                            logger.error(f"Error moving folder {folder_name}: {e}")
+
+                logger.info("Waiting for next cycle...")
                 # Wait for DELAY seconds or until a stop command or shutdown signal
                 for i in range(DELAY):
                     if state["command"] == "stop" or shutdown_event.is_set():
                         if shutdown_event.is_set():
-                            print("[SHUTDOWN] Graceful shutdown requested during delay.")
+                            logger.info("[SHUTDOWN] Graceful shutdown requested during delay.")
                             state["command"] = "exit"
                         state["running"] = False
                         state["command"] = None if not shutdown_event.is_set() else "exit"
                         break
                     await interruptible_sleep(1)
 
-            print("Stopping acquisition, cleaning up...")
+            logger.info("Stopping acquisition, cleaning up...")
             if hsd_info.is_log_started:
                 hsd_info.stop_log()
-            print("Done. Waiting for new command, or send 'exit' to quit.")
+            logger.info("Done. Waiting for new command, or send 'exit' to quit.")
 
             cut_number += 1  # increment for next cycle
 
         await interruptible_sleep(0.1)
     
     # Final cleanup when exiting the main loop
-    print("[SHUTDOWN] Performing final cleanup...")
+    logger.info("[SHUTDOWN] Performing final cleanup...")
     try:
         if 'hsd_info' in locals() and hsd_info.is_log_started:
-            print("[SHUTDOWN] Stopping any active logging...")
+            logger.info("[SHUTDOWN] Stopping any active logging...")
             hsd_info.stop_log()
-        print("[SHUTDOWN] HSD cleanup complete.")
+        logger.info("[SHUTDOWN] HSD cleanup complete.")
     except Exception as e:
-        print(f"[ERROR] Error during HSD cleanup: {e}")
+        logger.error(f"[ERROR] Error during HSD cleanup: {e}")
 
 async def main():
     state = {"running": False, "command": None, "stop_requested": False}
@@ -308,31 +343,31 @@ async def main():
                 pass
                 
     except KeyboardInterrupt:
-        print("\n[SHUTDOWN] Ctrl+C received, shutting down.")
+        logger.info("\n[SHUTDOWN] Ctrl+C received, shutting down.")
     except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}")
+        logger.error(f"[ERROR] Unexpected error: {e}")
     finally:
         try:
             # Ensure logging is stopped if it was running
             if state.get("running", False):
-                print("[SHUTDOWN] Stopping any active logging...")
+                logger.info("[SHUTDOWN] Stopping any active logging...")
                 # Note: hsd_info cleanup would be handled in cut_logging_task
-            print("[SHUTDOWN] Service shutdown complete.")
+            logger.info("[SHUTDOWN] Service shutdown complete.")
         except Exception as e:
-            print(f"[ERROR] Error during shutdown: {e}")
+            logger.error(f"[ERROR] Error during shutdown: {e}")
 
 if __name__ == "__main__":
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    
-    print("🚀 STDatalog CLI Service Starting...")
-    print(f"Working directory: {os.getcwd()}")
-    print(f"Python path: {sys.path[:3]}...")  # Show first 3 paths
+
+    logger.info("🚀 STDatalog CLI Service Starting...")
+    logger.info(f"Working directory: {os.getcwd()}")
+    logger.info(f"Python path: {sys.path[:3]}...")  # Show first 3 paths
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nExiting by user request.")
+        logger.info("\nExiting by user request.")
     except Exception as e:
-        print(f"Fatal error: {e}")
+        logger.error(f"Fatal error: {e}")
         sys.exit(1)
