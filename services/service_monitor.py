@@ -125,6 +125,16 @@ LAST_KNOWN_BLE_STATUS = {
 
 def get_ble_status():
     global LAST_KNOWN_BLE_STATUS
+    
+    # First check if the BLE service is running
+    ble_service_status = get_service_status('stdatalog-ble')
+    if ble_service_status != 'active':
+        # If service is not active, return unknown status for both sensors
+        return {
+            'speed_sensor': {'connected': False, 'status': 'Service not running'},
+            'feedrate_sensor': {'connected': False, 'status': 'Service not running'}
+        }
+    
     try:
         log_file = SERVICES['stdatalog-ble']['log_file']
         if not os.path.exists(log_file):
@@ -528,16 +538,28 @@ HTML_TEMPLATE = """
                         const speedLed = document.getElementById("speed-sensor-led");
                         const speedStatus = document.getElementById("speed-sensor-status");
                         if (speedLed && speedStatus) {
-                            speedLed.className = "ble-led " + (data.system.ble_status.speed_sensor.connected ? "connected" : "disconnected");
-                            speedStatus.textContent = data.system.ble_status.speed_sensor.status;
+                            // Check if service is not running
+                            if (data.system.ble_status.speed_sensor.status === "Service not running") {
+                                speedLed.className = "ble-led unknown";
+                                speedStatus.textContent = "Service not running";
+                            } else {
+                                speedLed.className = "ble-led " + (data.system.ble_status.speed_sensor.connected ? "connected" : "disconnected");
+                                speedStatus.textContent = data.system.ble_status.speed_sensor.status;
+                            }
                         }
                         
                         // Feedrate sensor
                         const feedrateLed = document.getElementById("feedrate-sensor-led");
                         const feedrateStatus = document.getElementById("feedrate-sensor-status");
                         if (feedrateLed && feedrateStatus) {
-                            feedrateLed.className = "ble-led " + (data.system.ble_status.feedrate_sensor.connected ? "connected" : "disconnected");
-                            feedrateStatus.textContent = data.system.ble_status.feedrate_sensor.status;
+                            // Check if service is not running
+                            if (data.system.ble_status.feedrate_sensor.status === "Service not running") {
+                                feedrateLed.className = "ble-led unknown";
+                                feedrateStatus.textContent = "Service not running";
+                            } else {
+                                feedrateLed.className = "ble-led " + (data.system.ble_status.feedrate_sensor.connected ? "connected" : "disconnected");
+                                feedrateStatus.textContent = data.system.ble_status.feedrate_sensor.status;
+                            }
                         }
                     }
                 } catch (error) {
