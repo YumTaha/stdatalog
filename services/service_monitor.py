@@ -471,6 +471,68 @@ HTML_TEMPLATE = """
                             statusText.textContent = info.status.toUpperCase() + (info.auto_restart ? " (Auto-restart)" : " (Manual)");
                             statusText.className = "service-status " + (info.status === "active" ? "status-active" : "status-inactive");
                         }
+                        
+                        // Update buttons dynamically based on service status
+                        const buttonContainer = document.querySelector(`[data-service="${service_id}"]`);
+                        if (buttonContainer) {
+                            const isActive = info.status === "active";
+                            const isCompact = buttonContainer.classList.contains('compact-buttons');
+                            
+                            // Create the appropriate buttons HTML
+                            let buttonsHTML;
+                            if (isActive) {
+                                // Service is active - show restart and stop buttons
+                                if (isCompact) {
+                                    buttonsHTML = `
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="restart">
+                                            <button type="submit" class="btn btn-restart" style="padding: 8px 12px; font-size: 12px;">🔄</button>
+                                        </form>
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="stop">
+                                            <button type="submit" class="btn btn-stop" style="padding: 8px 12px; font-size: 12px;">⏹️</button>
+                                        </form>
+                                    `;
+                                } else {
+                                    buttonsHTML = `
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="restart">
+                                            <button type="submit" class="btn btn-restart">🔄 Restart</button>
+                                        </form>
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="stop">
+                                            <button type="submit" class="btn btn-stop">⏹️ Stop</button>
+                                        </form>
+                                    `;
+                                }
+                            } else {
+                                // Service is inactive - show restart and start buttons
+                                if (isCompact) {
+                                    buttonsHTML = `
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="restart">
+                                            <button type="submit" class="btn btn-restart" style="padding: 8px 12px; font-size: 12px;">🔄</button>
+                                        </form>
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="start">
+                                            <button type="submit" class="btn btn-start" style="padding: 8px 12px; font-size: 12px;">▶️</button>
+                                        </form>
+                                    `;
+                                } else {
+                                    buttonsHTML = `
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="restart">
+                                            <button type="submit" class="btn btn-restart">🔄 Restart</button>
+                                        </form>
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="start">
+                                            <button type="submit" class="btn btn-start">▶️ Start</button>
+                                        </form>
+                                    `;
+                                }
+                            }
+                            buttonContainer.innerHTML = buttonsHTML;
+                        }
                     }
                 } catch (error) {
                     console.error("Error updating services:", error);
@@ -610,7 +672,7 @@ HTML_TEMPLATE = """
                             <small id="usb-info" style="display: block; margin-top: 2px;">Insert USB stick to begin data transfer</small>
                         </div>
                     </div>
-                    <div class="compact-right">
+                    <div class="compact-right" data-service="{{ service_id }}" class="compact-buttons">
                         <form method="post" action="/control/{{ service_id }}" style="display: inline;">
                             <input type="hidden" name="action" value="restart">
                             <button type="submit" class="btn btn-restart" style="padding: 8px 12px; font-size: 12px;">🔄</button>
@@ -671,7 +733,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
                 
-                <div style="margin-top: 15px;">
+                <div style="margin-top: 15px;" data-service="{{ service_id }}">
                     <form method="post" action="/control/{{ service_id }}" style="display: inline;">
                         <input type="hidden" name="action" value="restart">
                         <button type="submit" class="btn btn-restart">🔄 Restart</button>
