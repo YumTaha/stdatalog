@@ -131,6 +131,28 @@ async def maintain_socket():
                 writer.write(b'\n')
                 await writer.drain()
                 await interruptible_sleep(2)
+        except ConnectionRefusedError:
+            logger.warning("Socket lost: Connection refused (CLI service not running)")
+            socket_connected = False
+            if socket_writer:
+                socket_writer.close()
+                try:
+                    await socket_writer.wait_closed()
+                except:
+                    pass
+            socket_writer = None
+            await interruptible_sleep(2)
+        except OSError as e:
+            logger.warning(f"Socket lost: Network error (errno {e.errno}: {e.strerror})")
+            socket_connected = False
+            if socket_writer:
+                socket_writer.close()
+                try:
+                    await socket_writer.wait_closed()
+                except:
+                    pass
+            socket_writer = None
+            await interruptible_sleep(2)
         except Exception as e:
             logger.warning(f"Socket lost: {e}")
             socket_connected = False
