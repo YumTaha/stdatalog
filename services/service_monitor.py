@@ -36,8 +36,7 @@ SERVICES = {
 }
 
 # Acquisition folder monitoring
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ACQ_FOLDER = os.path.join(SCRIPT_DIR, "acquisition_data")
+ACQ_FOLDER = "/home/kirwinr/Desktop/stdatalog/acquisition_data"
 
 def ansi_to_html(text):
     """Convert ANSI color codes to HTML with colors matching colorlog setup"""
