@@ -1,6 +1,20 @@
 # Services Folder - Auto-Running Background Programs
 
-This folder contains everything needed to make your STDatalog system run **automatically in the background** like a professional service. Think of these as "background workers" that start when your computer boots up and keep running even if you're not logged in.
+This folder contains everything needed to make your STDatalog system run **automatically in the background** like a professional service. Think of t## 🚨 Troubleshooting (When Things Go Wrong)
+
+### "Python module not found" or "Command not found":
+**This is usually a virtual environment issue!**
+```bash
+# Make sure you're in the right directory and virtual environment is active
+cd /home/kirwinr/Desktop/stdatalog
+source .venv/bin/activate
+
+# Then try your command again
+cd services/
+./stdatalog-services status
+```
+
+### "Service won't start" or shows as "failed":e as "background workers" that start when your computer boots up and keep running even if you're not logged in.
 
 ## 🎯 What This Does (Simple Explanation)
 
@@ -18,7 +32,11 @@ Instead of manually starting Python scripts every time, this sets up **Linux ser
 ```bash
 # From the main stdatalog directory:
 ./global_setup.sh
-source .venv/bin/activate  # Always activate the virtual environment
+sudo reboot  # REQUIRED for Wi-Fi/Bluetooth disabling and USB drivers
+
+# After reboot, always activate the virtual environment
+cd /home/kirwinr/Desktop/stdatalog
+source .venv/bin/activate
 ```
 
 **Step 1:** Install the services (makes them start automatically)
@@ -35,7 +53,8 @@ http://localhost:8080
 **Step 3:** Use simple commands to control everything
 ```bash
 # Remember: Always activate virtual environment first!
-source ../.venv/bin/activate
+cd /home/kirwinr/Desktop/stdatalog
+source .venv/bin/activate
 
 ./stdatalog-services status        # See what's running
 ./stdatalog-services start cli     # Start the data recorder  
