@@ -75,21 +75,24 @@ source .venv/bin/activate
 
 ### STDatalog BLE (`stdatalog-ble`) - The Smart Trigger
 - **What it does**: Watches your BLE sensors and automatically tells CLI when to record
-- **When to use**: Keep this running all the time
+- **When to use**: Start this manually when you want automated sensor monitoring
+- **Auto-start on boot**: NO - you must start it manually with `./stdatalog-services start ble`
 - **Auto-restart**: YES - if it crashes, it starts itself again
 - **Log file**: `/home/kirwinr/logs/stdatalog-ble.log`
 - **Think of it as**: The "smart switch" that knows when your machine is cutting
 
 ### USB Transfer (`stdatalog-usboffload`) - The Auto-Backup
 - **What it does**: Copies your data to any USB drive you plug in
-- **When to use**: Keep this running all the time  
-- **Auto-restart**: YES - always stays running
+- **When to use**: Start this manually when you want automatic USB backup
+- **Auto-start on boot**: NO - you must start it manually with `./stdatalog-services start usb`
+- **Auto-restart**: YES - if it crashes, it starts itself again
 - **Log file**: `/home/kirwinr/logs/stdatalog-usb.log`
 - **Think of it as**: Automatic backup whenever you insert a USB stick
 
 ### Service Monitor (`stdatalog-monitor`) - The Web Dashboard
 - **What it does**: Creates a website where you can see everything that's happening
-- **When to use**: Keep this running to use the web dashboard
+- **When to use**: Starts automatically on boot and keeps running
+- **Auto-start on boot**: YES - automatically starts when the system boots
 - **Auto-restart**: YES - always stays running
 - **Website**: http://localhost:8080
 - **Think of it as**: Your "control panel" in a web browser
@@ -134,13 +137,14 @@ Open http://localhost:8080 in your web browser to see:
 ## 🔧 Typical Workflow (How You'll Actually Use This)
 
 ### Daily Use:
-1. **Turn on your computer** → Services start automatically
+1. **Turn on your computer** → Only the web dashboard starts automatically
 2. **Check the web dashboard** → http://localhost:8080  
-3. **Connect your STDatalog hardware** → Nothing happens yet (good!)
-4. **Start the CLI service** → `./stdatalog-services start cli`
-5. **The BLE service watches sensors** → When your machine cuts, data recording starts automatically
-6. **Plug in USB stick** → Data gets copied automatically
-7. **When done** → `./stdatalog-services stop cli` (BLE and USB keep running)
+3. **Start the services you need** → `./stdatalog-services start ble` and `./stdatalog-services start usb`
+4. **Connect your STDatalog hardware** → Nothing happens yet (good!)
+5. **Start the CLI service** → `./stdatalog-services start cli`
+6. **The BLE service watches sensors** → When your machine cuts, data recording starts automatically
+7. **Plug in USB stick** → Data gets copied automatically (if USB service is running)
+8. **When done** → `./stdatalog-services stop cli` (BLE and USB keep running until you stop them)
 
 ### If Something Goes Wrong:
 1. **Check the web dashboard** → See which service has a problem

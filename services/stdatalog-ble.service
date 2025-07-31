@@ -22,4 +22,5 @@ KillSignal=SIGTERM
 TimeoutStopSec=30
 
 [Install]
-WantedBy=multi-user.target
+# No WantedBy target - this service must be started manually
+# It will restart on failure but won't auto-start on boot

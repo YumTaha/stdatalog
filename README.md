@@ -111,10 +111,12 @@ sudo reboot
 
 5. **Connect your STDatalog hardware** (the actual sensor board)
 
-6. **Start data collection** when ready:
+6. **Start the services you need** when ready:
    ```bash
    cd services/
-   ./stdatalog-services start cli
+   ./stdatalog-services start ble    # Start BLE sensor monitoring
+   ./stdatalog-services start usb    # Start USB auto-backup
+   ./stdatalog-services start cli    # Start data collection
    ```
 
 ### For Daily Use:

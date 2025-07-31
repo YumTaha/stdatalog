@@ -55,20 +55,16 @@ install_services() {
 enable_services() {
     echo -e "${BLUE}🚀 Enabling services...${NC}"
     
-    # Enable monitor service (always runs)
+    # Enable monitor service (always runs and auto-starts on boot)
     sudo systemctl enable stdatalog-monitor
     sudo systemctl start stdatalog-monitor
     
-    # Enable BLE service (auto-restart)
-    sudo systemctl enable stdatalog-ble
+    # BLE and USB services are manual start only (will restart on failure but not on boot)
+    echo -e "${YELLOW}ℹ️ BLE service configured for manual start only (restarts on failure)${NC}"
+    echo -e "${YELLOW}ℹ️ USB service configured for manual start only (restarts on failure)${NC}"
+    echo -e "${YELLOW}ℹ️ CLI service configured for manual start only${NC}"
     
-    # Enable USB offload service (auto-restart)
-    sudo systemctl enable stdatalog-usboffload
-    
-    # Don't enable CLI service (manual start only)
-    echo -e "${YELLOW}ℹ️ CLI service will be started manually only${NC}"
-    
-    echo -e "${GREEN}✅ Services enabled${NC}"
+    echo -e "${GREEN}✅ Services configured${NC}"
 }
 
 # Show status
