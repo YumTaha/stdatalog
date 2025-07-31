@@ -291,5 +291,6 @@ cd services/
 **Need more details?** Check out the folder-specific README files:
 - 📁 [Services README](services/README.md) - For setup and service management
 - 📁 [Thread README](thread/README.md) - For BLE sensors and USB transfer
+- [STDATALOG-PYSDK Repository](https://github.com/STMicroelectronics/stdatalog-pysdk) - For STD Communication
 
 Good luck, and may your data collection be ever automatic! 🎯
