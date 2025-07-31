@@ -4,3 +4,4 @@
 .vscode/
 acquisition_data/
 **/libusb-*
+stdatalog_root.json
