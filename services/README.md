@@ -14,6 +14,13 @@ Instead of manually starting Python scripts every time, this sets up **Linux ser
 
 ## 🚀 Quick Setup (First Time Only)
 
+**Prerequisites:** Make sure you've run the global setup first:
+```bash
+# From the main stdatalog directory:
+./global_setup.sh
+source .venv/bin/activate  # Always activate the virtual environment
+```
+
 **Step 1:** Install the services (makes them start automatically)
 ```bash
 cd /home/kirwinr/Desktop/stdatalog/services
@@ -27,6 +34,9 @@ http://localhost:8080
 
 **Step 3:** Use simple commands to control everything
 ```bash
+# Remember: Always activate virtual environment first!
+source ../.venv/bin/activate
+
 ./stdatalog-services status        # See what's running
 ./stdatalog-services start cli     # Start the data recorder  
 ./stdatalog-services start ble     # Start the sensor monitor
@@ -282,7 +292,7 @@ sudo rm /etc/systemd/system/stdatalog-*.service
 sudo systemctl daemon-reload
 ```
 
-## 📞 Support
+## Support
 
 If you encounter issues:
 1. Check service logs: `./stdatalog-services logs <service>`

@@ -8,6 +8,7 @@ import asyncio
 import time
 import shutil
 import glob
+import signal
 from datetime import datetime
 
 # ROOT:
@@ -21,6 +22,27 @@ DELAY = 14      # seconds to wait
 DEVICE_CONFIG_PATH = os.path.join(PROJECT_ROOT, "device_config.json")
 OUTPUT_FOLDER = os.path.join(PROJECT_ROOT, "acquisition_data")
 SOCKET_PORT = 8888
+
+# Global shutdown flag
+shutdown_event = asyncio.Event()
+
+async def interruptible_sleep(duration):
+    """Sleep that can be interrupted by shutdown event."""
+    try:
+        await asyncio.wait_for(
+            asyncio.wait([
+                asyncio.create_task(asyncio.sleep(duration)),
+                asyncio.create_task(shutdown_event.wait())
+            ], return_when=asyncio.FIRST_COMPLETED),
+            timeout=duration + 1
+        )
+    except asyncio.TimeoutError:
+        pass
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    print(f"[SIGNAL] Received signal {signum}, initiating graceful shutdown...")
+    shutdown_event.set()
 
 # Ensure the TUI and SDK are in the path
 print("[STARTUP] Adding TUI path to sys.path...")
@@ -44,8 +66,12 @@ async def handle_client(reader, writer, state):
     addr = writer.get_extra_info('peername')
     print(f'[IPC] Connected by {addr}')
     try:
-        while True:
-            data = await reader.read(32)
+        while not shutdown_event.is_set():
+            try:
+                data = await asyncio.wait_for(reader.read(32), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue  # Check shutdown event again
+            
             if not data:
                 print(f'[IPC] Disconnected by {addr}')
                 break
@@ -152,7 +178,13 @@ async def cut_logging_task(state):
 
     cut_number = get_next_cut_number(OUTPUT_FOLDER)
 
-    while True:
+    while not shutdown_event.is_set():
+        # Check for shutdown signal first
+        if shutdown_event.is_set():
+            print("[SHUTDOWN] Graceful shutdown requested.")
+            state["command"] = "exit"
+            break
+            
         # Exit condition
         if state["command"] == "exit":
             print("Exiting program. Goodbye.")
@@ -176,7 +208,14 @@ async def cut_logging_task(state):
             state["running"] = True
             state["command"] = None
 
-            while state["running"]:
+            while state["running"] and not shutdown_event.is_set():
+                # Check for shutdown signal
+                if shutdown_event.is_set():
+                    print("[SHUTDOWN] Graceful shutdown requested during acquisition.")
+                    state["running"] = False
+                    state["command"] = "exit"
+                    break
+                    
                 # Get list of existing folders before logging
                 existing_folders = set()
                 if os.path.exists(OUTPUT_FOLDER):
@@ -186,9 +225,16 @@ async def cut_logging_task(state):
                 
                 print(f"Starting log cycle...")
                 hsd_info.start_log()
-                await asyncio.sleep(ACQ_TIME)
+                await interruptible_sleep(ACQ_TIME)
                 hsd_info.stop_log()
                 print("Log cycle complete.")
+                
+                # Check for shutdown again after logging
+                if shutdown_event.is_set():
+                    print("[SHUTDOWN] Graceful shutdown requested after logging.")
+                    state["running"] = False
+                    state["command"] = "exit"
+                    break
                 
                 # Find new folders created during logging
                 if os.path.exists(OUTPUT_FOLDER):
@@ -209,13 +255,16 @@ async def cut_logging_task(state):
                             print(f"Error moving folder {folder_name}: {e}")
                 
                 print("Waiting for next cycle...")
-                # Wait for DELAY seconds or until a stop command
-                for _ in range(DELAY):
-                    if state["command"] == "stop":
+                # Wait for DELAY seconds or until a stop command or shutdown signal
+                for i in range(DELAY):
+                    if state["command"] == "stop" or shutdown_event.is_set():
+                        if shutdown_event.is_set():
+                            print("[SHUTDOWN] Graceful shutdown requested during delay.")
+                            state["command"] = "exit"
                         state["running"] = False
-                        state["command"] = None
+                        state["command"] = None if not shutdown_event.is_set() else "exit"
                         break
-                    await asyncio.sleep(1)
+                    await interruptible_sleep(1)
 
             print("Stopping acquisition, cleaning up...")
             if hsd_info.is_log_started:
@@ -224,16 +273,59 @@ async def cut_logging_task(state):
 
             cut_number += 1  # increment for next cycle
 
-        await asyncio.sleep(0.1)
+        await interruptible_sleep(0.1)
+    
+    # Final cleanup when exiting the main loop
+    print("[SHUTDOWN] Performing final cleanup...")
+    try:
+        if 'hsd_info' in locals() and hsd_info.is_log_started:
+            print("[SHUTDOWN] Stopping any active logging...")
+            hsd_info.stop_log()
+        print("[SHUTDOWN] HSD cleanup complete.")
+    except Exception as e:
+        print(f"[ERROR] Error during HSD cleanup: {e}")
 
 async def main():
     state = {"running": False, "command": None, "stop_requested": False}
-    await asyncio.gather(
-        async_socket_listener(state),
-        cut_logging_task(state)
-    )
+    try:
+        tasks = [
+            asyncio.create_task(async_socket_listener(state)),
+            asyncio.create_task(cut_logging_task(state))
+        ]
+        
+        # Wait for either tasks to complete or shutdown signal
+        done, pending = await asyncio.wait(
+            tasks + [asyncio.create_task(shutdown_event.wait())],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        # Cancel any pending tasks
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+                
+    except KeyboardInterrupt:
+        print("\n[SHUTDOWN] Ctrl+C received, shutting down.")
+    except Exception as e:
+        print(f"[ERROR] Unexpected error: {e}")
+    finally:
+        try:
+            # Ensure logging is stopped if it was running
+            if state.get("running", False):
+                print("[SHUTDOWN] Stopping any active logging...")
+                # Note: hsd_info cleanup would be handled in cut_logging_task
+            print("[SHUTDOWN] Service shutdown complete.")
+        except Exception as e:
+            print(f"[ERROR] Error during shutdown: {e}")
 
 if __name__ == "__main__":
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     print("🚀 STDatalog CLI Service Starting...")
     print(f"Working directory: {os.getcwd()}")
     print(f"Python path: {sys.path[:3]}...")  # Show first 3 paths
@@ -241,3 +333,6 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\nExiting by user request.")
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        sys.exit(1)

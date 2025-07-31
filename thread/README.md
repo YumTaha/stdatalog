@@ -114,6 +114,18 @@ python3 ble_service.py --log DEBUG
 
 ## 🆕 Recent Features Added
 
+### Graceful Shutdown Support
+- **Proper Signal Handling**: Service now responds correctly to both Ctrl+C (SIGINT) and `systemctl stop` (SIGTERM)
+- **Clean BLE Disconnect**: All BLE devices are properly disconnected during shutdown
+- **Service Integration**: Works seamlessly with systemd service management
+- **Prevents Stale Connections**: Ensures no hanging BLE connections that could interfere with restart
+
+**How it works:**
+- When you run `sudo systemctl stop stdatalog-ble`, the service receives a SIGTERM signal
+- The script gracefully shuts down all BLE connections and cleans up resources
+- No more need to manually disconnect devices or worry about stale connections
+- Service can be safely restarted without BLE connection issues
+
 ### Smart Speed Sensor Disconnect Handling
 - **1-Minute Grace Period**: When speed sensor disconnects, system waits 60 seconds before sending stop command
 - **Automatic Logging**: All disconnections logged with timestamps to `acquisition_data/speed_sensor_disconnections.txt`

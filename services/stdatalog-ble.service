@@ -1,5 +1,5 @@
 [Unit]
-Description=STDatalog BLE Controller Service
+Description=STDatalog BLE Test Monitor Service
 After=network.target bluetooth.target
 Wants=network.target bluetooth.target
 Requires=bluetooth.target
