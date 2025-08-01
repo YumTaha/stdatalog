@@ -10,6 +10,7 @@ import os
 import json
 import time
 import re
+import threading
 from datetime import datetime
 import psutil
 import sys
@@ -949,6 +950,26 @@ def get_disk_usage():
     except:
         return 0
 
+def open_browser_after_delay():
+    """Open browser after a 10-second delay"""
+    def delayed_open():
+        time.sleep(10)
+        try:
+            # Open browser to the dashboard (not fullscreen)
+            subprocess.Popen([
+                'chromium-browser', 
+                '--disable-infobars', 
+                '--disable-session-crashed-bubble', 
+                '--disable-restore-session-state',
+                'http://10.0.71.110:8080/'
+            ], env=dict(os.environ, DISPLAY=':0'))
+            print("🌐 Browser opened to dashboard")
+        except Exception as e:
+            print(f"⚠️ Failed to open browser: {e}")
+    
+    # Run in a separate thread so it doesn't block the main app
+    threading.Thread(target=delayed_open, daemon=True).start()
+
 
 
 @app.route("/")
@@ -1044,5 +1065,9 @@ if __name__ == "__main__":
     print("🌐 STDatalog Service Monitor starting...")
     print("📊 Dashboard available at: http://10.0.71.110:8080/")
     print("🔌 API endpoint available at: http://10.0.71.110:8080/api/status")
+    print("⏱️ Browser will open in 10 seconds...")
+    
+    # Start browser opening in background
+    open_browser_after_delay()
     
     app.run(host="0.0.0.0", port=8080, debug=False)

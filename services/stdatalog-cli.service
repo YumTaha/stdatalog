@@ -11,8 +11,10 @@ WorkingDirectory=/home/kirwinr/Desktop/stdatalog/stdatalog_examples/gui_applicat
 Environment=PATH=/home/kirwinr/Desktop/stdatalog/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=VIRTUAL_ENV=/home/kirwinr/Desktop/stdatalog/.venv
 ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python stdatalog_CLI.py
-Restart=no
-RestartSec=5
+Restart=on-failure
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
 StandardOutput=append:/home/kirwinr/logs/stdatalog-cli.log
 StandardError=append:/home/kirwinr/logs/stdatalog-cli.log
 KillMode=mixed

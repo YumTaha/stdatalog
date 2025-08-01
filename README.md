@@ -117,6 +117,7 @@ sudo reboot
    ./stdatalog-services start ble    # Start BLE sensor monitoring
    ./stdatalog-services start usb    # Start USB auto-backup
    ./stdatalog-services start cli    # Start data collection
+   ./stdatalog-services start heartbeat  # Start service health monitoring (optional)
    ```
 
 ### For Daily Use:
@@ -159,6 +160,7 @@ Then use these commands:
 - **Smart Disconnect Handling**: If the speed sensor disconnects, the system waits 1 minute before stopping data collection (in case it's just a temporary connection issue)
 - **Disconnect Logging**: All speed sensor disconnections are logged with timestamps to `acquisition_data/speed_sensor_disconnections.txt` for troubleshooting
 - **Auto-Reconnection**: Both BLE sensors automatically try to reconnect forever if disconnected
+- **Service Health Monitoring**: Optional heartbeat monitor that automatically restarts CLI and BLE services if they become unresponsive, with system reboot after 5 consecutive failures
 - **Architecture-Specific Libraries**: Automatically installs the correct libraries for your system (ARM 32-bit, ARM 64-bit, or x86_64)
 - **Automated Installation**: The `global_setup.sh` script automatically installs all dependencies including:
   - **System libraries**: audio (ALSA, PortAudio), USB (libusb, udev), GUI support (Qt/X11), build tools (gcc, make)
@@ -235,6 +237,9 @@ cd services/
 
 # Restart if something's stuck
 ./stdatalog-services restart ble
+
+# Start optional heartbeat monitor (auto-restarts failed services)
+./stdatalog-services start heartbeat
 ```
 
 ### Data Management:

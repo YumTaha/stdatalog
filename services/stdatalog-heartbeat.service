@@ -1,0 +1,23 @@
+[Unit]
+Description=STDatalog Heartbeat Monitor
+After=network.target stdatalog-cli.service stdatalog-ble.service
+Wants=stdatalog-cli.service stdatalog-ble.service
+
+[Service]
+Type=simple
+User=kirwinr
+Group=kirwinr
+WorkingDirectory=/home/kirwinr/Desktop/stdatalog/services
+Environment=PATH=/home/kirwinr/Desktop/stdatalog/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python heartbeat_monitor.py
+Restart=always
+RestartSec=30
+StandardOutput=append:/home/kirwinr/logs/heartbeat-monitor.log
+StandardError=append:/home/kirwinr/logs/heartbeat-monitor.log
+
+# Resource limits
+MemoryMax=20M
+CPUQuota=5%
+
+[Install]
+WantedBy=multi-user.target

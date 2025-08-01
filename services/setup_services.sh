@@ -33,6 +33,7 @@ setup_logs() {
     sudo touch /home/kirwinr/logs/stdatalog-cli.log
     sudo touch /home/kirwinr/logs/stdatalog-ble.log
     sudo touch /home/kirwinr/logs/service-monitor.log
+    sudo touch /home/kirwinr/logs/heartbeat-monitor.log
     sudo touch /home/kirwinr/logs/stdatalog-usboffload.log
     sudo chown kirwinr:kirwinr /home/kirwinr/logs/*.log
     sudo chmod 664 /home/kirwinr/logs/*.log
@@ -55,16 +56,25 @@ install_services() {
 enable_services() {
     echo -e "${BLUE}🚀 Enabling services...${NC}"
     
-    # Enable monitor service (always runs and auto-starts on boot)
+    # Enable all services to auto-start on boot and restart on failure
     sudo systemctl enable stdatalog-monitor
     sudo systemctl start stdatalog-monitor
     
-    # BLE and USB services are manual start only (will restart on failure but not on boot)
-    echo -e "${YELLOW}ℹ️ BLE service configured for manual start only (restarts on failure)${NC}"
-    echo -e "${YELLOW}ℹ️ USB service configured for manual start only (restarts on failure)${NC}"
-    echo -e "${YELLOW}ℹ️ CLI service configured for manual start only${NC}"
+    sudo systemctl enable stdatalog-ble
+    sudo systemctl start stdatalog-ble
     
-    echo -e "${GREEN}✅ Services configured${NC}"
+    sudo systemctl enable stdatalog-cli
+    sudo systemctl start stdatalog-cli
+    
+    sudo systemctl enable stdatalog-heartbeat
+    sudo systemctl start stdatalog-heartbeat
+    
+    sudo systemctl enable stdatalog-usboffload
+    sudo systemctl start stdatalog-usboffload
+    
+    echo -e "${GREEN}✅ All services enabled and started${NC}"
+    echo -e "${BLUE}🌐 Browser will auto-open via service monitor${NC}"
+    echo -e "${BLUE}💓 Background heartbeat monitor active${NC}"
 }
 
 # Show status
@@ -72,7 +82,7 @@ show_status() {
     echo -e "\n${BLUE}📊 Service Status:${NC}"
     echo "----------------------------------------"
     
-    services=("stdatalog-monitor" "stdatalog-ble" "stdatalog-cli" "stdatalog-usboffload")
+    services=("stdatalog-monitor" "stdatalog-ble" "stdatalog-cli" "stdatalog-heartbeat" "stdatalog-usboffload")
     for service in "${services[@]}"; do
         status=$(systemctl is-active $service 2>/dev/null || echo "inactive")
         if [ "$status" = "active" ]; then
@@ -85,12 +95,15 @@ show_status() {
     echo ""
     echo -e "${BLUE}🌐 Dashboard URLs:${NC}"
     echo "  Network:  http://$(hostname -I | cut -d' ' -f1):8080"
+    echo "  Browser:  Opens automatically via service monitor"
     echo ""
     echo -e "${BLUE}📋 Useful Commands:${NC}"
     echo "  Start CLI:      sudo systemctl start stdatalog-cli"
     echo "  Stop CLI:       sudo systemctl stop stdatalog-cli"
     echo "  Restart BLE:    sudo systemctl restart stdatalog-ble"
     echo "  Restart USB:    sudo systemctl restart stdatalog-usboffload"
+    echo "  Restart Monitor: sudo systemctl restart stdatalog-monitor"
+    echo "  Restart Heartbeat: sudo systemctl restart stdatalog-heartbeat"
     echo "  View logs:      tail -f /home/kirwinr/logs/stdatalog-*.log"
     echo "  Service status: systemctl status stdatalog-cli"
 }
@@ -112,7 +125,7 @@ main() {
     show_status
     
     echo -e "\n${GREEN}🎉 Setup complete!${NC}"
-    echo -e "${YELLOW}⚠️ Remember: CLI service requires manual start after hardware reset${NC}"
+    echo -e "${YELLOW}⚠️ Remember: CLI service might requires manual start after hardware reset${NC}"
 }
 
 # Run main function
