@@ -10,13 +10,13 @@ User=kirwinr
 Group=kirwinr
 WorkingDirectory=/home/kirwinr/Desktop/stdatalog/thread
 Environment=PYTHONPATH=/home/kirwinr/Desktop/stdatalog:/home/kirwinr/Desktop/stdatalog/.venv/lib/python3.11/site-packages
-ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python ble_service.py
+ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python test_ble.py
 Restart=on-failure
 RestartSec=10
 StartLimitInterval=60
 StartLimitBurst=3
-StandardOutput=append:/home/kirwinr/logs/stdatalog-ble.log
-StandardError=append:/home/kirwinr/logs/stdatalog-ble.log
+StandardOutput=append:/home/kirwinr/logs/stdatalog-bletest.log
+StandardError=append:/home/kirwinr/logs/stdatalog-bletest.log
 KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=30
