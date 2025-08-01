@@ -34,7 +34,6 @@ setup_logs() {
     sudo touch /home/kirwinr/logs/stdatalog-ble.log
     sudo touch /home/kirwinr/logs/service-monitor.log
     sudo touch /home/kirwinr/logs/stdatalog-usboffload.log
-    sudo touch /home/kirwinr/logs/stdatalog-browser.log
     sudo chown kirwinr:kirwinr /home/kirwinr/logs/*.log
     sudo chmod 664 /home/kirwinr/logs/*.log
 }
@@ -69,10 +68,8 @@ enable_services() {
     sudo systemctl enable stdatalog-usboffload
     sudo systemctl start stdatalog-usboffload
     
-    # Enable browser service (runs once on graphical login)
-    sudo systemctl enable stdatalog-browser
-    
     echo -e "${GREEN}✅ All services enabled and started${NC}"
+    echo -e "${BLUE}🌐 Browser will auto-open via service monitor${NC}"
 }
 
 # Show status
@@ -80,7 +77,7 @@ show_status() {
     echo -e "\n${BLUE}📊 Service Status:${NC}"
     echo "----------------------------------------"
     
-    services=("stdatalog-monitor" "stdatalog-ble" "stdatalog-cli" "stdatalog-usboffload" "stdatalog-browser")
+    services=("stdatalog-monitor" "stdatalog-ble" "stdatalog-cli" "stdatalog-usboffload")
     for service in "${services[@]}"; do
         status=$(systemctl is-active $service 2>/dev/null || echo "inactive")
         if [ "$status" = "active" ]; then
@@ -93,13 +90,14 @@ show_status() {
     echo ""
     echo -e "${BLUE}🌐 Dashboard URLs:${NC}"
     echo "  Network:  http://$(hostname -I | cut -d' ' -f1):8080"
+    echo "  Browser:  Opens automatically via service monitor"
     echo ""
     echo -e "${BLUE}📋 Useful Commands:${NC}"
     echo "  Start CLI:      sudo systemctl start stdatalog-cli"
     echo "  Stop CLI:       sudo systemctl stop stdatalog-cli"
     echo "  Restart BLE:    sudo systemctl restart stdatalog-ble"
     echo "  Restart USB:    sudo systemctl restart stdatalog-usboffload"
-    echo "  Open Browser:   sudo systemctl start stdatalog-browser"
+    echo "  Restart Monitor: sudo systemctl restart stdatalog-monitor"
     echo "  View logs:      tail -f /home/kirwinr/logs/stdatalog-*.log"
     echo "  Service status: systemctl status stdatalog-cli"
 }
