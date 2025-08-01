@@ -18,7 +18,7 @@ import colorlog
 LOG_FILE = os.path.expanduser("/home/kirwinr/logs/stdatalog-cli.log")
 
 logger = logging.getLogger("HSDatalogApp")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # File handler (no ANSI)
 file_handler = logging.FileHandler(LOG_FILE, mode='a')

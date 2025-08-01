@@ -10,6 +10,8 @@ import fcntl
 import errno
 from contextlib import contextmanager
 from pathlib import Path
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from thread.find_root import find_subfolder
 
 # =================== Configuration ===================
