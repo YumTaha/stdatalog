@@ -23,6 +23,7 @@ Instead of manually starting Python scripts every time, this sets up **Linux ser
 - **🔄 STDatalog CLI Service**: The main data recorder (only starts when you tell it to)
 - **🔄 STDatalog BLE Service**: Watches the BLE sensors and tells CLI when to start/stop
 - **📀 USB Transfer Service**: Automatically copies data to any USB drive you plug in
+- **💓 Heartbeat Monitor Service**: Monitors CLI and BLE services, automatically restarts them if unresponsive (optional)
 - **🌐 Web Dashboard**: A website you can open to see what's happening (http://localhost:8080)
 - **📊 Easy Controls**: Simple commands to start/stop everything
 
@@ -60,6 +61,7 @@ source .venv/bin/activate
 ./stdatalog-services start cli     # Start the data recorder  
 ./stdatalog-services start ble     # Start the sensor monitor
 ./stdatalog-services start usb     # Start USB auto-transfer
+./stdatalog-services start heartbeat # Start service health monitor (optional)
 ./stdatalog-services restart ble   # Restart if something's stuck
 ./stdatalog-services stop all      # Stop everything
 ```
@@ -97,6 +99,20 @@ source .venv/bin/activate
 - **Website**: http://localhost:8080
 - **Think of it as**: Your "control panel" in a web browser
 
+### Heartbeat Monitor (`stdatalog-heartbeat`) - The Service Watchdog
+- **What it does**: Monitors CLI and BLE services for health, automatically restarts them if unresponsive
+- **When to use**: Optional - start manually if you want automatic service recovery
+- **Auto-start on boot**: NO - you must start it manually with `./stdatalog-services start heartbeat`
+- **Auto-restart**: YES - if it crashes, it starts itself again
+- **Log file**: `/home/kirwinr/logs/heartbeat-monitor.log`
+- **Key features**:
+  - Waits 60 seconds after boot before starting monitoring
+  - Checks services every 60 seconds via socket connection (CLI) and log activity (BLE)
+  - Restarts both services if either fails to respond within timeout
+  - Reboots system after 5 consecutive failures to prevent endless restart loops
+  - Resets failure counter if services recover successfully
+- **Think of it as**: An "insurance policy" that keeps your services running automatically
+
 ## 🛠 How to Control Everything (Management Commands)
 
 ### The Easy Way - Use the `stdatalog-services` script:
@@ -109,6 +125,7 @@ source .venv/bin/activate
 ./stdatalog-services start cli      # Start the data recorder
 ./stdatalog-services start ble      # Start the sensor monitor
 ./stdatalog-services start usb      # Start USB auto-backup
+./stdatalog-services start heartbeat # Start service health monitor
 ./stdatalog-services stop ble       # Stop the sensor monitor
 ./stdatalog-services restart ble    # Restart if it's stuck
 
@@ -120,6 +137,7 @@ source .venv/bin/activate
 ./stdatalog-services logs cli       # See CLI messages
 ./stdatalog-services tail ble       # Watch BLE messages in real-time
 ./stdatalog-services logs usb       # See USB transfer messages
+./stdatalog-services logs heartbeat # See heartbeat monitor messages
 
 # Open the web dashboard
 ./stdatalog-services dashboard      # Opens http://localhost:8080
@@ -140,11 +158,12 @@ Open http://localhost:8080 in your web browser to see:
 1. **Turn on your computer** → Only the web dashboard starts automatically
 2. **Check the web dashboard** → http://localhost:8080  
 3. **Start the services you need** → `./stdatalog-services start ble` and `./stdatalog-services start usb`
-4. **Connect your STDatalog hardware** → Nothing happens yet (good!)
-5. **Start the CLI service** → `./stdatalog-services start cli`
-6. **The BLE service watches sensors** → When your machine cuts, data recording starts automatically
-7. **Plug in USB stick** → Data gets copied automatically (if USB service is running)
-8. **When done** → `./stdatalog-services stop cli` (BLE and USB keep running until you stop them)
+4. **(Optional) Start heartbeat monitor** → `./stdatalog-services start heartbeat` for automatic service recovery
+5. **Connect your STDatalog hardware** → Nothing happens yet (good!)
+6. **Start the CLI service** → `./stdatalog-services start cli`
+7. **The BLE service watches sensors** → When your machine cuts, data recording starts automatically
+8. **Plug in USB stick** → Data gets copied automatically (if USB service is running)
+9. **When done** → `./stdatalog-services stop cli` (BLE and USB keep running until you stop them)
 
 ### If Something Goes Wrong:
 1. **Check the web dashboard** → See which service has a problem
@@ -192,8 +211,10 @@ services/
 ├── stdatalog-cli.service      # CLI service definition
 ├── stdatalog-ble.service      # BLE service definition  
 ├── stdatalog-monitor.service  # Web dashboard service
+├── stdatalog-heartbeat.service # Service health monitoring
 ├── stdatalog-usboffload.service # USB data transfer service
 ├── service_monitor.py         # Web dashboard application
+├── heartbeat_monitor.py       # Service health monitor script
 ├── setup_services.sh          # Installation script
 ├── stdatalog-services         # Management script
 └── README.md                  # This file
@@ -227,6 +248,16 @@ systemctl status stdatalog-cli
 ./stdatalog-services logs cli
 ```
 
+### "Service keeps failing/restarting":
+```bash
+# Check if heartbeat monitor is too aggressive
+./stdatalog-services logs heartbeat
+# Stop heartbeat monitor temporarily to test
+./stdatalog-services stop heartbeat
+# Check individual service health
+./stdatalog-services logs cli
+./stdatalog-services logs ble
+```
 ### "Permission denied" errors:
 ```bash
 # Fix file permissions
@@ -267,8 +298,10 @@ services/
 ├── stdatalog-cli.service      # Tells Linux how to run the data recorder
 ├── stdatalog-ble.service      # Tells Linux how to run the sensor monitor
 ├── stdatalog-monitor.service  # Tells Linux how to run the web dashboard
+├── stdatalog-heartbeat.service # Tells Linux how to run the service health monitor
 ├── stdatalog-usboffload.service # Tells Linux how to run USB auto-backup
 ├── service_monitor.py         # The code for the web dashboard
+├── heartbeat_monitor.py       # The code for service health monitoring
 ├── setup_services.sh          # Script that installs everything (run once)
 ├── stdatalog-services         # The main control script (use this often!)
 └── README.md                  # This helpful guide
