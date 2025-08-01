@@ -6,6 +6,7 @@ After=network.target
 Type=simple
 # Update this path to your Python interpreter in your venv!
 ExecStart=/home/kirwinr/Desktop/stdatalog/.venv/bin/python /home/kirwinr/Desktop/stdatalog/thread/usb_transfer.py
+Environment=PYTHONPATH=/home/kirwinr/Desktop/stdatalog:/home/kirwinr/Desktop/stdatalog/.venv/lib/python3.11/site-packages
 WorkingDirectory=/home/kirwinr/Desktop/stdatalog/thread
 User=kirwinr
 Group=kirwinr
@@ -15,4 +16,5 @@ StandardOutput=append:/home/kirwinr/logs/stdatalog-usboffload.log
 StandardError=append:/home/kirwinr/logs/stdatalog-usboffload.log
 
 [Install]
-WantedBy=multi-user.target
+# No WantedBy target - this service must be started manually
+# It will restart on failure but won't auto-start on boot

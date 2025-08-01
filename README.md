@@ -27,7 +27,7 @@ stdatalog/
 ├── 📁 stdatalog_gui/     ← Graphical interface
 ├── 📁 stdatalog_pnpl/    ← PnP Like configuration library
 ├── 📁 stdatalog_dtk/     ← Data Toolkit for processing
-├── 📁 stdatalog_examples/ ← Example code and tutorials
+├── 📁 stdatalog_examples/ ← Example code, tutorials, and ready-to-use applications
 ├── 📁 acquisition_data/  ← Where your recorded data gets saved
 ├── 📁 linux_setup/      ← USB permission setup for Linux
 ├── 📁 .venv/            ← Python virtual environment (created by global_setup.sh)
@@ -35,7 +35,19 @@ stdatalog/
 └── 📄 README.md          ← This file
 ```
 
-## 🚀 Quick Start Guide
+## �️ System Requirements
+
+- **Operating System**: Linux (tested on Raspberry Pi OS, Ubuntu)
+- **Python**: 3.10 or later (3.10, 3.11, 3.12, 3.13 supported)
+- **Architecture**: x86_64, ARM 32-bit (armv7l), ARM 64-bit (aarch64)
+- **Hardware**: STMicroelectronics STWINBX1 board
+- **BLE Sensors**: Feedrate and Speed sensors (optional but recommended for automated operation)
+- **Storage**: At least 2GB free space for installation and data
+- **Network**: Internet connection for initial setup (downloads dependencies)
+
+**Note**: The installation script automatically disables onboard Wi-Fi and Bluetooth on Raspberry Pi to prevent interference with external BLE sensors.
+
+## �🚀 Quick Start Guide
 
 ### One-Command Installation (New Users):
 
@@ -50,16 +62,18 @@ cd stdatalog
 ```
 
 **What the global setup does:**
+- ✅ Disables onboard Wi-Fi and Bluetooth (to avoid interference with BLE sensors)
 - ✅ Checks system requirements (Python 3.10+)
-- ✅ Installs system dependencies (audio, GUI, USB drivers)
-- ✅ Creates Python virtual environment
-- ✅ Installs all STDATALOG-PYSDK packages
-- ✅ Configures USB drivers for STWINBX1
+- ✅ Installs system dependencies (audio, GUI, USB drivers, build tools)
+- ✅ Creates Python virtual environment (.venv)
+- ✅ Installs all STDATALOG-PYSDK packages (v1.2.0) from wheel files
+- ✅ Configures USB drivers and permissions for STWINBX1
+- ✅ Sets up proper library paths for different architectures (ARM/x86)
 - ✅ Tests the installation
 
 **After global setup:**
 ```bash
-# Reboot is recommended for USB drivers to work properly
+# IMPORTANT: A system reboot is REQUIRED for Wi-Fi/Bluetooth disabling and USB drivers
 sudo reboot
 ```
 
@@ -73,34 +87,43 @@ sudo reboot
 
 ### After Installation - Setup Services:
 
-1. **Activate the virtual environment** (required):
+1. **Reboot your system** (required for Wi-Fi/Bluetooth disabling and USB drivers):
    ```bash
+   sudo reboot
+   ```
+
+2. **After reboot, activate the virtual environment** (required):
+   ```bash
+   cd /home/kirwinr/Desktop/stdatalog
    source .venv/bin/activate
    ```
 
-2. **Set up the automatic services** (makes everything run in the background):
+3. **Set up the automatic services** (makes everything run in the background):
    ```bash
    cd services/
    ./setup_services.sh
    ```
 
-3. **Open the web dashboard** to see what's happening:
+4. **Open the web dashboard** to see what's happening:
    ```
    http://localhost:8080
    ```
 
-4. **Connect your STDatalog hardware** (the actual sensor board)
+5. **Connect your STDatalog hardware** (the actual sensor board)
 
-5. **Start data collection** when ready:
+6. **Start the services you need** when ready:
    ```bash
    cd services/
-   ./stdatalog-services start cli
+   ./stdatalog-services start ble    # Start BLE sensor monitoring
+   ./stdatalog-services start usb    # Start USB auto-backup
+   ./stdatalog-services start cli    # Start data collection
    ```
 
 ### For Daily Use:
 
 **Important:** Always activate the virtual environment first:
 ```bash
+cd /home/kirwinr/Desktop/stdatalog
 source .venv/bin/activate
 ```
 
@@ -132,14 +155,20 @@ Then use these commands:
 - **Machine Idle** = No speed sensor activity → ❌ Don't record
 
 ### Advanced Features:
+- **Onboard Wi-Fi and Bluetooth Disabled**: The setup automatically disables the Raspberry Pi's onboard Wi-Fi and Bluetooth via `/boot/firmware/config.txt` to prevent interference with external BLE sensors
 - **Smart Disconnect Handling**: If the speed sensor disconnects, the system waits 1 minute before stopping data collection (in case it's just a temporary connection issue)
 - **Disconnect Logging**: All speed sensor disconnections are logged with timestamps to `acquisition_data/speed_sensor_disconnections.txt` for troubleshooting
 - **Auto-Reconnection**: Both BLE sensors automatically try to reconnect forever if disconnected
+- **Architecture-Specific Libraries**: Automatically installs the correct libraries for your system (ARM 32-bit, ARM 64-bit, or x86_64)
 - **Automated Installation**: The `global_setup.sh` script automatically installs all dependencies including:
-  - System libraries (audio, USB, GUI support)
-  - Python packages (numpy, matplotlib, pandas, bleak, colorlog)
-  - STDATALOG-PYSDK components (core, GUI, examples, PnPL, DTK)
-  - USB drivers and permissions for STWINBX1
+  - **System libraries**: audio (ALSA, PortAudio), USB (libusb, udev), GUI support (Qt/X11), build tools (gcc, make)
+  - **Python packages**: numpy, matplotlib, pandas, bleak (BLE), colorlog, flask, psutil, h5py, pyserial
+  - **STDATALOG-PYSDK components v1.2.0**: 
+    - `stdatalog_core` - Main data logging functionality
+    - `stdatalog_gui` - Graphical user interface  
+    - `stdatalog_pnpl` - PnP Like configuration library
+    - `stdatalog_dtk` - Data Toolkit for processing
+  - **USB drivers and permissions** for STWINBX1 with proper udev rules
 
 ## 🔧 Main Components
 
@@ -227,15 +256,24 @@ cd services/
 ## 🚨 Troubleshooting Quick Fixes
 
 ### "Nothing is working!"
-1. **Check virtual environment**: `source .venv/bin/activate`
+1. **Check virtual environment**: 
+   ```bash
+   cd /home/kirwinr/Desktop/stdatalog
+   source .venv/bin/activate
+   ```
 2. Check web dashboard: http://localhost:8080
 3. Restart everything: `cd services && ./stdatalog-services restart all`
 4. Check logs: `./stdatalog-services logs cli`
 
 ### "Command not found" or "Module not found"
-1. **Make sure virtual environment is active**: `source .venv/bin/activate`
+1. **Make sure virtual environment is active**: 
+   ```bash
+   cd /home/kirwinr/Desktop/stdatalog
+   source .venv/bin/activate
+   ```
 2. If still broken, reinstall: `./global_setup.sh`
 3. Check Python version: `python --version` (should be 3.10+)
+4. **After reinstall, remember to reboot**: `sudo reboot`
 
 ### "BLE sensors not connecting"
 1. Make sure sensors are powered on and nearby
@@ -291,6 +329,7 @@ cd services/
 **Need more details?** Check out the folder-specific README files:
 - 📁 [Services README](services/README.md) - For setup and service management
 - 📁 [Thread README](thread/README.md) - For BLE sensors and USB transfer
+- 📁 [Examples README](stdatalog_examples/README.md) - For example applications and tutorials
 - [STDATALOG-PYSDK Repository](https://github.com/STMicroelectronics/stdatalog-pysdk) - For STD Communication
 
 Good luck, and may your data collection be ever automatic! 🎯

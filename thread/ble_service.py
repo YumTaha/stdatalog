@@ -4,10 +4,11 @@ import struct
 import socket
 import os
 import time
+import colorlog
 import signal
 from datetime import datetime
 from bleak import BleakClient, BleakScanner
-import colorlog
+from thread.find_root import find_subfolder
 
 # === Configuration ===
 SOCKET_HOST = '127.0.0.1'
@@ -20,11 +21,14 @@ UUIDS = {
     "Feedrate": "2772836b-8bb0-4d0f-a52c-254b5d1fa438",
     "Speed": "04403980-1579-4b57-81eb-bfcdce019b9f"
 }
-FEEDRATE_START_THRESHOLD = -20.0
+FEEDRATE_START_THRESHOLD = -0.3
 SPEED_REQUIRED_THRESHOLD = 0.3
-BETWEEN_COMMANDS = 0.2  # seconds
-ACQ_FOLDER = "../acquisition_data"
-LOG_FILE = f"{ACQ_FOLDER}/ble_disconnects.txt"
+BETWEEN_COMMANDS = 1  # seconds
+ACQ_FOLDER = find_subfolder("acquisition_data")
+if not ACQ_FOLDER:
+    raise RuntimeError("acquisition_data folder not found.")
+LOG_FILE = os.path.join(ACQ_FOLDER, "ble_disconnects.txt")
+
 
 # === Globals ===
 ble_connected = {name: False for name in BLE_MACS}
@@ -60,7 +64,17 @@ def signal_handler(signum, frame):
 logger = logging.getLogger("BLEMonitor")
 handler = colorlog.StreamHandler()
 formatter = colorlog.ColoredFormatter(
-    "%(asctime)s - %(levelname)s - %(message)s"
+    "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG':    'cyan',
+        'INFO':     'white', 
+        'WARNING':  'yellow',
+        'ERROR':    'red',
+        'CRITICAL': 'bold_red',
+    },
+    force_color=True  # Force colors even when redirected to file
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -121,6 +135,28 @@ async def maintain_socket():
                 writer.write(b'\n')
                 await writer.drain()
                 await interruptible_sleep(2)
+        except ConnectionRefusedError:
+            logger.warning("Socket lost: Connection refused (CLI service not running)")
+            socket_connected = False
+            if socket_writer:
+                socket_writer.close()
+                try:
+                    await socket_writer.wait_closed()
+                except:
+                    pass
+            socket_writer = None
+            await interruptible_sleep(2)
+        except OSError as e:
+            logger.warning(f"Socket lost: Network error (errno {e.errno}: {e.strerror})")
+            socket_connected = False
+            if socket_writer:
+                socket_writer.close()
+                try:
+                    await socket_writer.wait_closed()
+                except:
+                    pass
+            socket_writer = None
+            await interruptible_sleep(2)
         except Exception as e:
             logger.warning(f"Socket lost: {e}")
             socket_connected = False
@@ -182,7 +218,7 @@ async def connect_ble(name, mac, uuid, handler, ready_event=None):
 # === Notification Handlers ===
 def feedrate_notify_handler(sender, data):
     raw = parse_float32_le(data)
-    v_in_min = round(raw * 39.3701 * 60, 3)
+    v_in_min = round(raw * 39.3701 * 60 / 1000, 3)
     latest_values["Feedrate"] = v_in_min
     _print_debug()
     _check_and_send_command()
@@ -200,7 +236,7 @@ def _print_debug():
         f = latest_values["Feedrate"]
         speed_str = f"{s:.2f}" if s is not None else "###"
         feed_str = f"{f:.2f}" if f is not None else "###"
-        logger.debug(f"({speed_str}, {feed_str})")
+        logger.debug(f"({speed_str} rad/s, {feed_str} in/min)")
 
 def _check_and_send_command():
     global last_command_sent

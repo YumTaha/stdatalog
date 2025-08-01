@@ -20,6 +20,8 @@ This is the **most important** script. It connects to **two BLE sensors**:
 1. **Feedrate Sensor** (`DE:6D:5D:2A:BD:58`) - Measures how fast something moves down (in inches per minute)
 2. **Speed Sensor** (`F9:51:AC:0F:75:9E`) - Measures rotational speed (in radians per second)
 
+**⚠️ Important**: These MAC addresses are **hardcoded** in the script. If you have different sensors, you'll need to update them in `ble_service.py`.
+
 **The Logic:**
 - When **BOTH** sensors are active → Machine is **CUTTING** → Sends "start" command
 - When **ONLY speed** sensor is active → Machine is **RESETTING** → Sends "stop" command  
@@ -94,7 +96,9 @@ python3 ble_service.py --log DEBUG
 
 ### "Connection timed out" or "device not found"
 - Check if BLE sensors are **powered on** and **nearby**
-- Make sure the **MAC addresses** in the script match your actual sensors
+- Make sure the **MAC addresses** in the script match your actual sensors:
+  - Edit `ble_service.py` and update the MAC addresses in the `FEEDRATE_MAC` and `SPEED_MAC` variables
+  - You can find BLE device MAC addresses using: `bluetoothctl scan on`
 - Try scanning for devices: `bluetoothctl scan on`
 
 ### "CLI logger not available"

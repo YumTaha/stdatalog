@@ -12,8 +12,24 @@ import time
 import re
 from datetime import datetime
 import psutil
+import sys
+from flask import session, abort, url_for
+from functools import wraps
 
+
+
+# Add the parent of this file’s directory to PYTHONPATH so 'thread' is importable
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from thread.find_root import find_subfolder
+ACQ_FOLDER = find_subfolder("acquisition_data")
+
+# Initialize Flask app
 app = Flask(__name__)
+
+# === Password Config ===
+DASHBOARD_PASSWORD = "qwerty"
+app.secret_key = "qwerty"  # Needed for sessions
 
 # Service configuration
 SERVICES = {
@@ -35,8 +51,53 @@ SERVICES = {
     }
 }
 
-# Acquisition folder monitoring
-ACQ_FOLDER = "/home/kirwinr/Desktop/stdatalog/acquisition_data"
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        pw = request.form.get("password", "")
+        if pw == DASHBOARD_PASSWORD:
+            session["logged_in"] = True
+            return redirect(url_for("dashboard"))
+        else:
+            return "<h3>Incorrect password</h3><a href='/login'>Try again</a>", 401
+
+    return '''
+        <html><head>
+        <style>
+        body {
+            background: #111;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: sans-serif;
+        }
+        input[type="password"] {
+            padding: 10px;
+            font-size: 16px;
+            width: 200px;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            margin-left: 10px;
+        }
+        </style></head><body>
+        <form method="POST">
+            <input type="password" name="password" placeholder="Enter password" autofocus/>
+            <button type="submit">Login</button>
+        </form>
+        </body></html>
+    '''
 
 def ansi_to_html(text):
     """Convert ANSI color codes to HTML with colors matching colorlog setup"""
@@ -125,6 +186,16 @@ LAST_KNOWN_BLE_STATUS = {
 
 def get_ble_status():
     global LAST_KNOWN_BLE_STATUS
+    
+    # First check if the BLE service is running
+    ble_service_status = get_service_status('stdatalog-ble')
+    if ble_service_status != 'active':
+        # If service is not active, return unknown status for both sensors
+        return {
+            'speed_sensor': {'connected': False, 'status': 'Service not running'},
+            'feedrate_sensor': {'connected': False, 'status': 'Service not running'}
+        }
+    
     try:
         log_file = SERVICES['stdatalog-ble']['log_file']
         if not os.path.exists(log_file):
@@ -461,6 +532,68 @@ HTML_TEMPLATE = """
                             statusText.textContent = info.status.toUpperCase() + (info.auto_restart ? " (Auto-restart)" : " (Manual)");
                             statusText.className = "service-status " + (info.status === "active" ? "status-active" : "status-inactive");
                         }
+                        
+                        // Update buttons dynamically based on service status
+                        const buttonContainer = document.querySelector(`[data-service="${service_id}"]`);
+                        if (buttonContainer) {
+                            const isActive = info.status === "active";
+                            const isCompact = buttonContainer.classList.contains('compact-buttons');
+                            
+                            // Create the appropriate buttons HTML
+                            let buttonsHTML;
+                            if (isActive) {
+                                // Service is active - show restart and stop buttons
+                                if (isCompact) {
+                                    buttonsHTML = `
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="restart">
+                                            <button type="submit" class="btn btn-restart" style="padding: 8px 12px; font-size: 12px;">🔄</button>
+                                        </form>
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="stop">
+                                            <button type="submit" class="btn btn-stop" style="padding: 8px 12px; font-size: 12px;">⏹️</button>
+                                        </form>
+                                    `;
+                                } else {
+                                    buttonsHTML = `
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="restart">
+                                            <button type="submit" class="btn btn-restart">🔄 Restart</button>
+                                        </form>
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="stop">
+                                            <button type="submit" class="btn btn-stop">⏹️ Stop</button>
+                                        </form>
+                                    `;
+                                }
+                            } else {
+                                // Service is inactive - show restart and start buttons
+                                if (isCompact) {
+                                    buttonsHTML = `
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="restart">
+                                            <button type="submit" class="btn btn-restart" style="padding: 8px 12px; font-size: 12px;">🔄</button>
+                                        </form>
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="start">
+                                            <button type="submit" class="btn btn-start" style="padding: 8px 12px; font-size: 12px;">▶️</button>
+                                        </form>
+                                    `;
+                                } else {
+                                    buttonsHTML = `
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="restart">
+                                            <button type="submit" class="btn btn-restart">🔄 Restart</button>
+                                        </form>
+                                        <form method="post" action="/control/${service_id}" style="display: inline;">
+                                            <input type="hidden" name="action" value="start">
+                                            <button type="submit" class="btn btn-start">▶️ Start</button>
+                                        </form>
+                                    `;
+                                }
+                            }
+                            buttonContainer.innerHTML = buttonsHTML;
+                        }
                     }
                 } catch (error) {
                     console.error("Error updating services:", error);
@@ -528,16 +661,28 @@ HTML_TEMPLATE = """
                         const speedLed = document.getElementById("speed-sensor-led");
                         const speedStatus = document.getElementById("speed-sensor-status");
                         if (speedLed && speedStatus) {
-                            speedLed.className = "ble-led " + (data.system.ble_status.speed_sensor.connected ? "connected" : "disconnected");
-                            speedStatus.textContent = data.system.ble_status.speed_sensor.status;
+                            // Check if service is not running
+                            if (data.system.ble_status.speed_sensor.status === "Service not running") {
+                                speedLed.className = "ble-led unknown";
+                                speedStatus.textContent = "Service not running";
+                            } else {
+                                speedLed.className = "ble-led " + (data.system.ble_status.speed_sensor.connected ? "connected" : "disconnected");
+                                speedStatus.textContent = data.system.ble_status.speed_sensor.status;
+                            }
                         }
                         
                         // Feedrate sensor
                         const feedrateLed = document.getElementById("feedrate-sensor-led");
                         const feedrateStatus = document.getElementById("feedrate-sensor-status");
                         if (feedrateLed && feedrateStatus) {
-                            feedrateLed.className = "ble-led " + (data.system.ble_status.feedrate_sensor.connected ? "connected" : "disconnected");
-                            feedrateStatus.textContent = data.system.ble_status.feedrate_sensor.status;
+                            // Check if service is not running
+                            if (data.system.ble_status.feedrate_sensor.status === "Service not running") {
+                                feedrateLed.className = "ble-led unknown";
+                                feedrateStatus.textContent = "Service not running";
+                            } else {
+                                feedrateLed.className = "ble-led " + (data.system.ble_status.feedrate_sensor.connected ? "connected" : "disconnected");
+                                feedrateStatus.textContent = data.system.ble_status.feedrate_sensor.status;
+                            }
                         }
                     }
                 } catch (error) {
@@ -588,7 +733,7 @@ HTML_TEMPLATE = """
                             <small id="usb-info" style="display: block; margin-top: 2px;">Insert USB stick to begin data transfer</small>
                         </div>
                     </div>
-                    <div class="compact-right">
+                    <div class="compact-right" data-service="{{ service_id }}" class="compact-buttons">
                         <form method="post" action="/control/{{ service_id }}" style="display: inline;">
                             <input type="hidden" name="action" value="restart">
                             <button type="submit" class="btn btn-restart" style="padding: 8px 12px; font-size: 12px;">🔄</button>
@@ -649,7 +794,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
                 
-                <div style="margin-top: 15px;">
+                <div style="margin-top: 15px;" data-service="{{ service_id }}">
                     <form method="post" action="/control/{{ service_id }}" style="display: inline;">
                         <input type="hidden" name="action" value="restart">
                         <button type="submit" class="btn btn-restart">🔄 Restart</button>
@@ -807,6 +952,7 @@ def get_disk_usage():
 
 
 @app.route("/")
+@login_required
 def dashboard():
     # Get service information
     services = {}
@@ -839,6 +985,7 @@ def dashboard():
                                 timestamp=timestamp)
 
 @app.route("/control/<service_id>", methods=["POST"])
+@login_required
 def control_service(service_id):
     if service_id not in SERVICES:
         return "Service not found", 404
