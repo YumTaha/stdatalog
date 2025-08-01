@@ -1,0 +1,19 @@
+[Unit]
+Description=STDatalog Browser Auto-Open Service
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=oneshot
+User=kirwinr
+Group=kirwinr
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/kirwinr/.Xauthority
+ExecStartPre=/bin/sleep 10
+ExecStart=/bin/bash -c 'export DISPLAY=:0; chromium-browser --start-fullscreen --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --kiosk http://10.0.71.110:8080/'
+RemainAfterExit=yes
+StandardOutput=append:/home/kirwinr/logs/stdatalog-browser.log
+StandardError=append:/home/kirwinr/logs/stdatalog-browser.log
+
+[Install]
+WantedBy=graphical-session.target
